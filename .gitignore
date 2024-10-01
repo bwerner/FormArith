@@ -1,0 +1,168 @@
+# = Taken from https://github.com/github/gitignore
+
+# == Coq gitignore
+.*.aux
+.*.d
+*.a
+*.cma
+*.cmi
+*.cmo
+*.cmx
+*.cmxa
+*.cmxs
+*.glob
+*.ml.d
+*.ml4.d
+*.mlg.d
+*.mli.d
+*.mllib.d
+*.mlpack.d
+*.native
+*.o
+*.v.d
+*.vio
+*.vo
+*.vok
+*.vos
+.coq-native
+.csdp.cache
+.lia.cache
+.nia.cache
+.nlia.cache
+.nra.cache
+csdp.cache
+lia.cache
+nia.cache
+nlia.cache
+nra.cache
+native_compute_profile_*.data
+
+# generated timing files
+*.timing.diff
+*.v.after-timing
+*.v.before-timing
+*.v.timing
+time-of-build-after.log
+time-of-build-before.log
+time-of-build-both.log
+time-of-build-pretty.log
+
+
+# == Dune gitignore
+
+*.annot
+*.cmo
+*.cma
+*.cmi
+*.a
+*.o
+*.cmx
+*.cmxs
+*.cmxa
+
+# ocamlbuild working directory
+_build/
+
+# ocamlbuild targets
+*.byte
+*.native
+
+# oasis generated files
+setup.data
+setup.log
+
+# Merlin configuring file for Vim and Emacs
+.merlin
+
+# Dune generated files
+*.install
+
+# Local OPAM switch
+_opam/
+
+
+# == Emacs gitignore
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# Org-mode
+.org-id-locations
+*_archive
+
+# flymake-mode
+*_flymake.*
+
+# eshell files
+/eshell/history
+/eshell/lastdir
+
+# elpa packages
+/elpa/
+
+# reftex files
+*.rel
+
+# AUCTeX auto folder
+/auto/
+
+# cask packages
+.cask/
+dist/
+
+# Flycheck
+flycheck_*.el
+
+# server auth directory
+/server/
+
+# projectiles files
+.projectile
+
+# directory configuration
+.dir-locals.el
+
+# network security
+/network-security.data
+
+
+# == Vim gitignore
+# Swap
+[._]*.s[a-v][a-z]
+!*.svg  # comment out if you don't need vector files
+[._]*.sw[a-p]
+[._]s[a-rt-v][a-z]
+[._]ss[a-gi-z]
+[._]sw[a-p]
+
+# Session
+Session.vim
+Sessionx.vim
+
+# Temporary
+.netrwhist
+*~
+# Auto-generated tag files
+tags
+# Persistent undo
+[._]*.un~
+
+
+# == VSCode gitignore
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+
+# Local History for Visual Studio Code
+.history/
+
+# Built Visual Studio Code Extensions
+*.vsix
