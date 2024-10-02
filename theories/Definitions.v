@@ -1,8 +1,4 @@
-Require Import ssreflect ssrbool Nat.
-Require Import BinNat.
-Require BinPos Ndec.
-Require Export Ring List.
-Require Import Lia.
+Require Import List.
 
 Inductive term :=
 | tdb : nat -> term
