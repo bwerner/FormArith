@@ -1,36 +1,73 @@
-Require Import List.
+Require Export List Nat.
+
+#[export] Set Default Goal Selector "!".
+
+Unset Elimination Schemes.
 
 Inductive term :=
-| tdb : nat -> term
-| tapp : nat -> list term -> term.
+  | TVar : nat -> term
+  | TApp : nat -> list term -> term.
 
-Inductive form :=
-| fatom : nat -> list term -> form
-| fconj : form -> form -> form
-| fdisj : form -> form -> form
-| fimp : form -> form -> form
-| fbot : form
-| ftop : form
-| ffa : form -> form
-| fex : form -> form.
+(* NOTE: Define induction principle to include `Forall P terms` for `TApp` *)
+Lemma term_ind (P: term -> Prop):
+  (forall (idx: nat), P (TVar idx)) ->
+  (forall (fct_idx: nat) (terms: list term),
+     Forall P terms -> P (TApp fct_idx terms)) ->
+  forall t, P t.
+Proof.
+  intros HVar HApp.
+  fix HR 1.
 
-Fixpoint tcoerce (F : nat -> list nat -> nat)
-         (g : list nat) (t : term) : nat :=
+  intros [ ? | ? terms ].
+  - apply HVar.
+  - apply HApp.
+    induction terms; constructor.
+    + apply HR.
+    + assumption.
+Qed.
+
+Set Elimination Schemes.
+
+Inductive formula :=
+  | FAtom : nat -> list term -> formula
+  | FConj : formula -> formula -> formula
+  | FDisj : formula -> formula -> formula
+  | FImp : formula -> formula -> formula
+  | FBot : formula
+  | FTop : formula
+  | FForAll : formula -> formula
+  | FExists : formula -> formula.
+
+Fixpoint term_eval (fcts: nat -> list nat -> nat) (sigma: list nat) (t: term): nat :=
   match t with
-  | tdb i => nth i g 0
-  | tapp f l => F f (map (tcoerce F g) l)
+  | TVar idx => nth idx sigma 0
+  | TApp fct_idx terms => fcts fct_idx (map (term_eval fcts sigma) terms)
   end.
 
-Fixpoint coerce (F : nat -> list nat -> nat)
-         (P : nat -> list nat -> Prop) (g : list nat)
-         (A : form) : Prop :=
-  match A with
-  | fbot => False
-  | ftop => True
-  | fatom R l => P R (map (tcoerce F g) l)
-  | fconj A B => (coerce F P g A)/\(coerce F P g B)
-  | fdisj A B => (coerce F P g A)\/(coerce F P g B)
-  | fimp A B => (coerce F P g A)->(coerce F P g B)
-  | ffa A => forall x, coerce F P (x::g) A
-  | fex A => exists x, coerce F P (x::g) A 
+Fixpoint formula_eval
+    (fcts: nat -> list nat -> nat) (preds : nat -> list nat -> Prop)
+    (sigma: list nat) (phi: formula): Prop :=
+  match phi with
+  | FAtom pred_idx terms => preds pred_idx (map (term_eval fcts sigma) terms)
+
+  | FConj phi phi' => (formula_eval fcts preds sigma phi) /\ (formula_eval fcts preds sigma phi')
+  | FDisj phi phi' => (formula_eval fcts preds sigma phi) \/ (formula_eval fcts preds sigma phi')
+  | FImp phi phi' => (formula_eval fcts preds sigma phi) -> (formula_eval fcts preds sigma phi')
+
+  | FBot => False
+  | FTop => True
+
+  | FForAll phi => forall x, formula_eval fcts preds (x :: sigma) phi
+  | FExists phi => exists x, formula_eval fcts preds (x :: sigma) phi
   end.
+
+
+Lemma app_cons_nil {T: Type} (l l': list T) (x: T):
+  (l ++ x :: nil) ++ l' = l ++ x :: l'.
+Proof.
+  induction l as [| ? ? IHl ]; simpl.
+  { reflexivity. }
+
+  rewrite IHl.
+  reflexivity.
+Qed.
