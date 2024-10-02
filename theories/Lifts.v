@@ -1,3 +1,9 @@
+Require Import ssreflect ssrbool.
+Require Import Lia.
+
+Require Import List Nat.
+
+From FormArith Require Import Definitions.
 
 Fixpoint tlift i j t :=
   match t with

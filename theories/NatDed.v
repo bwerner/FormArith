@@ -1,3 +1,9 @@
+Require Import ssreflect ssrbool.
+Require Import Lia.
+
+Require Import Nat List.
+
+From FormArith Require Import Definitions Lifts.
 
 Inductive NJ : (list form) -> form -> Type :=
 | RAxiom : forall G i,  NJ G (nth i G ftop)
