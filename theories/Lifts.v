@@ -1,331 +1,492 @@
-Require Import ssreflect ssrbool.
-Require Import Lia.
-
-Require Import List Nat.
-
 From FormArith Require Import Definitions.
 
-Fixpoint tlift i j t :=
+Require Import Lia.
+
+
+Fixpoint term_lift (until_idx up_idx: nat) (t: term): term :=
   match t with
-  | tapp f l =>
-      tapp f (map (tlift i j) l)
-  | tdb k =>
-      if (k <? i)
-      then t
-      else tdb (j + k)
+  | TVar idx => if (idx <? until_idx) then t else TVar (idx + up_idx)
+  | TApp fct_idx terms => TApp fct_idx (map (term_lift until_idx up_idx) terms)
   end.
 
-Fixpoint lift i j A :=
-  match A with
-  | fbot => A
-  | ftop => A
-  | fatom R l => fatom R (map (tlift i j) l)
-  | fconj A B => fconj (lift i j A)(lift i j B)
-  | fdisj A B => fdisj (lift i j A)(lift i j B)
-  | fimp A B => fimp (lift i j A)(lift i j B)
-  | ffa A => ffa (lift (S i) j A)
-  | fex A => fex (lift (S i) j A)
+Fixpoint formula_lift (until_idx up_idx: nat) (phi: formula): formula :=
+  match phi with
+  | FAtom pred_idx terms => FAtom pred_idx (map (term_lift until_idx up_idx) terms)
+
+  | FConj phi phi' => FConj (formula_lift until_idx up_idx phi) (formula_lift until_idx up_idx phi')
+  | FDisj phi phi' => FDisj (formula_lift until_idx up_idx phi) (formula_lift until_idx up_idx phi')
+  | FImp phi phi' => FImp (formula_lift until_idx up_idx phi) (formula_lift until_idx up_idx phi')
+
+  | FBot => phi
+  | FTop => phi
+
+  | FForAll phi => FForAll (formula_lift (S until_idx) up_idx phi)
+  | FExists phi => FExists (formula_lift (S until_idx) up_idx phi)
   end.
 
-Fixpoint tsubst i u t :=
+Fixpoint context_lift (until_idx up_idx: nat) (delta: list formula) :=
+  match delta with
+  | nil => delta
+  | phi :: delta => (formula_lift until_idx up_idx phi) :: (context_lift until_idx up_idx delta)
+  end.
+
+Fixpoint term_subst (change_idx: nat) (new_term: term) (t: term): term :=
   match t with
-  | tapp f l =>
-      tapp f (map (tsubst i u) l)
-  | tdb j =>
-      if (i =? j)
-      then u
-      else if (i <? j)
-           then tdb (j - 1)
-           else tdb j
+  | TVar idx =>
+      if (change_idx =? idx) then new_term else
+        if (change_idx <? idx) then TVar (idx - 1) else TVar idx
+  | TApp fct_idx terms => TApp fct_idx (map (term_subst change_idx new_term) terms)
   end.
 
-Fixpoint subst i u A :=
-  match A with
-  | fbot => A
-  | ftop => A
-  | fatom R l => fatom R (map (tsubst i u) l)
-  | fconj A B => fconj (subst i u A)(subst i u B)
-  | fdisj A B => fdisj (subst i u A)(subst i u B)
-  | fimp A B => fimp (subst i u A)(subst i u B)
-  | ffa A => ffa (subst (S i) (tlift 0 1 u) A)
-  | fex A => fex (subst (S i) (tlift 0 1 u) A)
+Fixpoint formula_subst (change_idx: nat) (new_term: term) (phi: formula): formula :=
+  match phi with
+  | FAtom pred_idx terms => FAtom pred_idx (map (term_subst change_idx new_term) terms)
+
+  | FConj phi phi' => FConj (formula_subst change_idx new_term phi) (formula_subst change_idx new_term phi')
+  | FDisj phi phi' => FDisj (formula_subst change_idx new_term phi) (formula_subst change_idx new_term phi')
+  | FImp phi phi' => FImp (formula_subst change_idx new_term phi) (formula_subst change_idx new_term phi')
+
+  | FBot => phi
+  | FTop => phi
+
+  | FForAll phi => FForAll (formula_subst (S change_idx) (term_lift 0 1 new_term) phi)
+  | FExists phi => FExists (formula_subst (S change_idx) (term_lift 0 1 new_term) phi)
   end.
 
 
-Lemma tsubst_lift : forall t u i, tsubst i u (tlift i 1 t) = t.
-  fix HR 1.
-  case => [k | f l] u i /=.
-  case ki : (_ <? _) => /=;
-   move/PeanoNat.Nat.leb_spec0: ki => ki;
-     case e : (_ =? _) => //=;
-      move/PeanoNat.Nat.eqb_spec: e => e; try lia;
-      case ik : (_ <? _) => /=;
-      move/PeanoNat.Nat.leb_spec0: ik => //= ik; try lia.
-  by rewrite PeanoNat.Nat.sub_0_r.
-replace (map (tsubst i u) (map (tlift i 1) l)) with l;
-    first done.
-elim: l => [| v l Hl] //=.
-by rewrite HR -Hl.  
+Ltac solve_TApp_case terms IHterms :=
+  let IHAppTerms := fresh "IHAppTerms" in
+
+  induction terms as [| ? ? IHAppTerms ]; simpl; [ reflexivity |];
+  f_equal; [ apply Forall_inv in IHterms | apply IHAppTerms; eapply Forall_inv_tail ]; eauto.
+
+Lemma term_lift_0 (t: term) (idx: nat):
+  term_lift idx 0 t = t.
+Proof.
+  induction t as [ n | ? terms IHterms ]; simpl.
+  2: { f_equal; solve_TApp_case terms IHterms. }
+
+  destruct (PeanoNat.Nat.ltb_spec n idx).
+  - reflexivity.
+  - f_equal; lia.
 Qed.
 
-Lemma tlift0 : forall t j, tlift j 0 t = t.
-fix HR 1.
-case => [i | f l] j /=.
-  by case: (_ <? _).
-replace (map (tlift j 0) l) with l; first done.
-elim: l => [//=|t l Hl]/=.
-by rewrite -Hl HR.
+Lemma term_lift_0_lift_0 (t: term) (idx idx': nat):
+  term_lift 0 idx (term_lift 0 idx' t) = term_lift 0 (idx + idx') t.
+Proof.
+  induction t as [| ? terms IHterms ]; simpl.
+  2: { f_equal; solve_TApp_case terms IHterms. }
+
+  f_equal; lia.
 Qed.
 
+Lemma term_lift_S_lift_0 (t: term) (idx: nat):
+  term_lift (S idx) 1 (term_lift 0 1 t) = term_lift 0 1 (term_lift idx 1 t).
+Proof.
+  induction t as [ n | ? terms IHterms ]; simpl.
+  2: { f_equal; solve_TApp_case terms IHterms. }
 
-Lemma tlift_lift0 : forall t i j, tlift 0 i (tlift 0 j t) = tlift 0 (i+j) t.
-fix HR 1.
-case => [k | f l] i j //=.
-  by rewrite PeanoNat.Nat.add_assoc.
-replace  (map (tlift 0 i) (map (tlift 0 j) l))
-         with  (map (tlift 0 (i + j)) l); first done.
-elim: l => [//= | u l /= ->].
-by rewrite HR.
+  destruct (PeanoNat.Nat.ltb_spec (n + 1) (S idx)), (PeanoNat.Nat.ltb_spec n idx);
+    (reflexivity || lia).
 Qed.
 
-Lemma tlift_lift : forall t j,
-    tlift (S j) 1 (tlift 0 1 t) = tlift 0 1 (tlift j 1 t).
-fix HR 1.
-case => [i | f l]/= j.
- case ij: (_ <? _); move/PeanoNat.Nat.leb_spec0: ij => ij;
-  case ij': (_ <? _); move/PeanoNat.Nat.leb_spec0: ij' => ij' //=;
-    lia.
-replace (map (tlift (S j) 1) (map (tlift 0 1) l))
-        with (map (tlift 0 1) (map (tlift j 1) l)); first done.
-elim: l => [//=| u l /= ->].
-by rewrite HR.
+Lemma term_lift_S_lift_n (t: term) (idx idx': nat):
+  term_lift (S (idx + idx')) 1 (term_lift idx 1 t) =
+    term_lift idx 1 (term_lift (idx + idx') 1 t).
+Proof.
+  induction t as [ n | ? terms IHterms ]; simpl.
+  2: { f_equal; solve_TApp_case terms IHterms. }
+
+  destruct (PeanoNat.Nat.ltb_spec n idx), (PeanoNat.Nat.ltb_spec n (idx + idx')).
+  all: destruct (PeanoNat.Nat.ltb_spec n idx), (PeanoNat.Nat.ltb_spec n (S (idx + idx'))); simpl.
+  all: destruct (PeanoNat.Nat.ltb_spec n idx), (PeanoNat.Nat.ltb_spec n (S (idx + idx'))).
+  all: destruct (PeanoNat.Nat.ltb_spec (n + 1) idx), (PeanoNat.Nat.ltb_spec (n + 1) (S (idx + idx'))).
+  all: reflexivity || lia.
 Qed.
 
+Lemma term_lift_n_lift_n (t: term) (idx idx' idx'': nat):
+  term_lift idx idx' (term_lift idx idx'' t) = term_lift idx (idx' + idx'') t.
+Proof.
+  induction t as [ n | ? terms IHterms ]; simpl.
+  2: { f_equal; solve_TApp_case terms IHterms. }
 
-Lemma tlift_lift' : forall t j k,
-    tlift (S (j+k)) 1 (tlift  k 1 t) = tlift k 1 (tlift (j+k) 1 t).
-fix HR 1.
-case => [i | f l]/= j k.
-  case ik: (_ <? _); move/PeanoNat.Nat.leb_spec0: ik => ik;
-  case ij: (_ <? _); move/PeanoNat.Nat.leb_spec0: ij => ij;
-  try lia; simpl;
-  case ijk: (_ <? _); move/PeanoNat.Nat.leb_spec0: ijk => ijk; try lia;
-  case ik': (_ <? _); move/PeanoNat.Nat.leb_spec0: ik' => ik' //=; try lia.
-replace (map (tlift (S (j + k)) 1) (map (tlift k 1) l))
-        with (map (tlift k 1) (map (tlift (j + k) 1) l)); first done.
-by elim: l => [//=| t l /= ->]; rewrite HR.
+  destruct (PeanoNat.Nat.ltb_spec n idx); simpl.
+  - destruct (PeanoNat.Nat.ltb_spec n idx); [| lia ].
+    reflexivity.
+
+  - destruct (PeanoNat.Nat.ltb_spec (n + idx'') idx); [ lia |].
+    f_equal; lia.
 Qed.
 
+Lemma term_lift_S_lift_0_iter (idx: nat) (terms: list term):
+  map (term_lift (S idx) 1) (map (term_lift 0 1) terms) =
+    map (term_lift 0 1) (map (term_lift idx 1) terms).
+Proof.
+  induction terms; simpl.
+  { reflexivity. }
 
-Lemma ltlift_tlift j : forall l,
-    map (tlift (S j) 1)(map (tlift 0 1) l) =
-      map (tlift 0 1)(map (tlift j 1) l).
-elim => [//= | t l /= ->].
-by rewrite tlift_lift.
+  rewrite term_lift_S_lift_0.
+  f_equal; assumption.
 Qed.
 
+Lemma term_lift_S_lift_n_iter (idx idx': nat) (terms: list term):
+  map (term_lift (S (idx + idx')) 1) (map (term_lift idx 1) terms) =
+    map (term_lift idx 1) (map (term_lift (idx + idx') 1) terms).
+Proof.
+  induction terms; simpl.
+  { reflexivity. }
 
-Lemma ltlift_tlift' j k : forall l,
-    map (tlift (S (j+k)) 1)(map (tlift k 1) l) =
-      map (tlift k 1)(map (tlift (j+k) 1) l).
-elim => [//= | t l /= ->].
-by rewrite tlift_lift'.
+  rewrite term_lift_S_lift_n.
+  f_equal; assumption.
 Qed.
 
-Lemma lift_lift : forall A j k,
-    lift (S (j+k)) 1 (lift k 1 A) = lift k 1 (lift (j+k) 1 A).
-fix HR 1.
-case => [X l | A B | A B | A B | //= | //= | A | A] j k /=;
-                                        try by (rewrite !HR).
-- by rewrite ltlift_tlift'.
-- move: (HR A j (S k));
-    rewrite PeanoNat.Nat.add_succ_r.
-  by move ->.
-- move: (HR A j (S k));
-    rewrite PeanoNat.Nat.add_succ_r.
-  by move ->.
+Lemma term_lift_n_lift_n_iter (idx idx' idx'': nat) (terms: list term):
+  map (term_lift idx idx') (map (term_lift idx idx'') terms) =
+    map (term_lift idx (idx' + idx'')) terms.
+Proof.
+  induction terms; simpl.
+  { reflexivity. }
+
+  rewrite term_lift_n_lift_n.
+  f_equal; assumption.
 Qed.
 
+Lemma term_subst_lift (t new_term: term) (idx: nat):
+  term_subst idx new_term (term_lift idx 1 t) = t.
+Proof.
+  induction t as [ n | ? terms IHterms ]; simpl.
+  2: { f_equal; solve_TApp_case terms IHterms. }
 
-Lemma tcoerce_lift : forall F h g x t,
-    tcoerce F (h++x::g) (tlift (length h) 1 t) = tcoerce F (h++g) t.
-move => F h g x; fix HR 1.
-case => [i | f l]/=.
- case ei : (_ <?_) => //=; move/PeanoNat.Nat.leb_spec0: ei => ei.
-   rewrite !app_nth1 //=; lia.
-   rewrite !app_nth2; try lia.
-   rewrite PeanoNat.Nat.sub_succ_l //=; lia.
-replace (map (tcoerce F (h ++ x :: g)) (map (tlift (length h) 1) l))
-  with (map (tcoerce F (h ++ g)) l); first done.
-by elim: l => [//= | t l /= ->]; rewrite HR.
+  destruct (PeanoNat.Nat.ltb_spec n idx); simpl.
+  - destruct (PeanoNat.Nat.eqb_spec idx n); [ lia |].
+    destruct (PeanoNat.Nat.ltb_spec idx n); [ lia |].
+    intros; reflexivity.
+
+  - destruct (PeanoNat.Nat.eqb_spec idx (n + 1)); [ lia |].
+    destruct (PeanoNat.Nat.ltb_spec idx (n + 1)); [| lia ].
+    f_equal; lia.
 Qed.
 
-Lemma tcoerce_lift' : forall F g h u,
- tcoerce F g u = tcoerce F (h ++ g) (tlift 0 (length h) u).
-move => F g h; fix HR 1.
-case => [i | f l]/=.
-   rewrite !app_nth2; try lia.
-   replace (length h + i - length h) with i; first done; lia.
-replace (map (tcoerce F g) l) with
-  (map (tcoerce F (h ++ g)) (map (tlift 0 (length h)) l));
-  first done.
-by elim: l => [//= | t l /= ->]; rewrite HR.
+Lemma term_subst_lift_iter (terms: list term) (new_term: term) (idx: nat):
+  map (term_subst idx new_term) (map (term_lift idx 1) terms) = terms.
+Proof.
+  induction terms as [| ? ? IHterms ]; simpl.
+  { reflexivity. }
+
+  f_equal.
+  - apply term_subst_lift.
+  - apply IHterms.
 Qed.
 
+Lemma term_eval_lift_n (fcts: nat -> list nat -> nat) (sigma sigma': list nat) (idx: nat) (t: term):
+  term_eval fcts (sigma ++ (idx :: sigma')) (term_lift (length sigma) 1 t) =
+    term_eval fcts (sigma ++ sigma') t.
+Proof.
+  induction t as [ idx' | ? terms IHterms ]; simpl.
+  - destruct (PeanoNat.Nat.ltb_spec idx' (length sigma)); simpl.
+    + rewrite !app_nth1 by assumption.
+      reflexivity.
 
-  
-Lemma lcoerce_lift : forall F h g x l,
-  (map (tcoerce F (h ++ x :: g)) (map (tlift (length h) 1) l)) = (map (tcoerce F (h ++ g)) l).
-move => F h g x; elim => [ //= | t l /= ->].
-by rewrite tcoerce_lift.
+    + rewrite !app_nth2 by lia.
+      replace (idx' + 1) with (S idx') by lia.
+      rewrite PeanoNat.Nat.sub_succ_l by assumption.
+      simpl; lia.
+
+  - replace (map _ _) with (map (term_eval fcts (sigma ++ sigma')) terms); [ reflexivity |].
+    solve_TApp_case terms IHterms.
 Qed.
 
-Lemma coerce_lift : forall F P A h g x,
-    coerce F P (h++x::g) (lift (length h) 1 A) <-> coerce F P (h++g) A. 
-move => F P.
-elim => [X l | A HA B HB | A HA B HB | A HA B HB | //= | //= | A HA | A HA] /= h g x.
-- by rewrite lcoerce_lift.
--  move: (HA h g x) => [HA1 HA2];
-   move: (HB h g x) => [HB1 HB2];
-   split; case; auto.
-- move: (HA h g x) => [HA1 HA2];
-   move: (HB h g x) => [HB1 HB2];
-   split; case; auto.
-- move: (HA h g x) => [HA1 HA2];
-   move: (HB h g x) => [HB1 HB2];
-   split; intro H; auto.
-- split; intros H y; move: (HA (y::h) g x) => [HA1 HA2];
-   [apply HA1 | apply HA2]; apply H.
--   split; intros [y H]; move: (HA (y::h) g x) => [HA1 HA2];
-    exists y;
-   [apply HA1 | apply HA2]; apply H.
+Lemma term_eval_lift_0 (fcts: nat -> list nat -> nat) (sigma sigma': list nat) (t: term):
+  term_eval fcts sigma t = term_eval fcts (sigma' ++ sigma) (term_lift 0 (length sigma') t).
+Proof.
+  induction t as [ idx | ? terms IHterms ]; simpl.
+  - rewrite app_nth2 by lia.
+    replace (idx + _ - _) with idx by lia.
+    reflexivity.
+
+  - replace (map _ (map _ _)) with (map (term_eval fcts sigma) terms); [ reflexivity |].
+    solve_TApp_case terms IHterms.
 Qed.
 
+Lemma term_eval_lift_n_iter (fcts: nat -> list nat -> nat)
+    (sigma sigma': list nat) (idx: nat) (terms: list term):
+  map (term_eval fcts (sigma ++ idx :: sigma')) (map (term_lift (length sigma) 1) terms) =
+    map (term_eval fcts (sigma ++ sigma')) terms.
+Proof.
+  induction terms; simpl.
+  { reflexivity. }
 
-Lemma tcst F : forall t u g h,
-    tcoerce F (h++(tcoerce F g u)::g) t
-    = tcoerce F (h++g) (tsubst (length h) (tlift 0 (length h) u) t).
-fix HR 1.
-case => [i | f l] u g h /=.
-- case hi: (_ =? _); move/PeanoNat.Nat.eqb_spec: hi => hi.
-   by rewrite -hi nth_middle -tcoerce_lift'.
-  case hi' : (_ <? _) => /=;
-    move/PeanoNat.Nat.leb_spec0: hi' => hi'.
-    move: hi' hi; case: i => [|i]//=; first lia.
-    move => hi _.
+  rewrite term_eval_lift_n.
+  f_equal; assumption.
+Qed.
+
+Lemma term_eval_subst_lift (fcts: nat -> list nat -> nat) (sigma sigma': list nat) (t t': term):
+  term_eval fcts (sigma ++ sigma') (term_subst (length sigma) (term_lift 0 (length sigma) t') t)
+    = term_eval fcts (sigma ++ (term_eval fcts sigma' t') :: sigma') t.
+Proof.
+  induction t as [ idx | ? terms IHterms ]; simpl.
+  2: { f_equal; solve_TApp_case terms IHterms. }
+
+  destruct (PeanoNat.Nat.eqb_spec (length sigma) idx) as [ Heq |]; simpl.
+  { rewrite <- Heq.
+    rewrite nth_middle.
+    rewrite <- term_eval_lift_0.
+    reflexivity. }
+
+  destruct (PeanoNat.Nat.ltb_spec (length sigma) idx) as [ Heq |]; simpl.
+  { destruct idx; [ lia |]; simpl.
     rewrite PeanoNat.Nat.sub_0_r.
-    rewrite app_nth2; first lia.
-    rewrite app_nth2; first lia.
-    rewrite PeanoNat.Nat.sub_succ_l //=; lia.
-  rewrite app_nth1;first lia.
-  by rewrite app_nth1;first lia.
-- replace (map (tcoerce F (h ++ tcoerce F g u :: g)) l)
-    with (map (tcoerce F (h ++ g)) (map (tsubst (length h) (tlift 0 (length h) u)) l));
-    first done.
-  elim: l => [| t l Hl]//=.
-  by rewrite Hl HR.
+    rewrite !app_nth2; [| lia.. ].
+    rewrite PeanoNat.Nat.sub_succ_l; [| lia ]; simpl.
+    reflexivity. }
+
+  rewrite !app_nth1; [| lia.. ].
+  reflexivity.
 Qed.
 
+Lemma formula_lift_S_lift_n (phi: formula) (idx idx': nat):
+  formula_lift (S (idx + idx')) 1 (formula_lift idx 1 phi) =
+    formula_lift idx 1 (formula_lift (idx + idx') 1 phi).
+Proof.
+  generalize idx.
 
-Lemma tlift_subst :
-  forall t u i,
-    tsubst i u (tlift i 1 t) = t.
-fix HR 1.
-case => [j | f l] u i /=.
-  case ij : (_ <? _) => //=;
-    move/PeanoNat.Nat.leb_spec0: ij => ij; 
-    case eij: (_ =? _) => //=;
-    move/PeanoNat.Nat.eqb_spec: eij => eij; try lia;
-    case nij : (_ <? _);
-    move/PeanoNat.Nat.leb_spec0: nij => nij //=; try lia.
-  by rewrite PeanoNat.Nat.sub_0_r.
-replace (map (tsubst i u) (map (tlift i 1) l)) with l; first done.
-elim: l => [//=| t l /= <-].
-by rewrite HR.
+  induction phi as [ | ? IHphi1 ? IHphi2 | ? IHphi1 ? IHphi2 | ? IHphi1 ? IHphi2 | | | ? IHphi | ? IHphi ];
+    simpl; intros.
+
+  (* FAtom *)
+  - rewrite term_lift_S_lift_n_iter.
+    reflexivity.
+
+  (* FConj, FDisj, FImp *)
+  - f_equal; [ apply IHphi1 | apply IHphi2 ].
+  - f_equal; [ apply IHphi1 | apply IHphi2 ].
+  - f_equal; [ apply IHphi1 | apply IHphi2 ].
+
+  (* FBot, FTop *)
+  - reflexivity.
+  - reflexivity.
+
+  (* FForAll, FExists *)
+  - rewrite <- PeanoNat.Nat.add_succ_l.
+    f_equal; apply IHphi.
+  - rewrite <- PeanoNat.Nat.add_succ_l.
+    f_equal; apply IHphi.
 Qed.
 
+Lemma formula_lift_n_lift_n (phi: formula) (idx idx' idx'': nat):
+  formula_lift idx idx' (formula_lift idx idx'' phi) =
+    formula_lift idx (idx' + idx'') phi.
+Proof.
+  generalize idx idx'.
 
-Lemma llift_subst : forall l i u,
-      (map (tsubst i u) (map (tlift i 1) l)) = l.
- elim => [//=| t l /= Hl] i u.
- by rewrite Hl tlift_subst.  
+  induction phi as [ ? terms | ? IHphi1 ? IHphi2 | ? IHphi1 ? IHphi2 | ? IHphi1 ? IHphi2 | | | ? IHphi | ? IHphi ];
+    simpl; intros.
+
+  (* FAtom *)
+  - f_equal; apply term_lift_n_lift_n_iter.
+
+  (* FConj, FDisj, FImp *)
+  - f_equal; [ apply IHphi1 | apply IHphi2 ].
+  - f_equal; [ apply IHphi1 | apply IHphi2 ].
+  - f_equal; [ apply IHphi1 | apply IHphi2 ].
+
+  (* FBot, FTop *)
+  - reflexivity.
+  - reflexivity.
+
+  (* FForAll, FExists *)
+  - f_equal; apply IHphi.
+  - f_equal; apply IHphi.
 Qed.
 
- Lemma lift_subst :
-  forall A u i,
-    subst i u (lift i 1 A) = A.
-   elim => [X l | A HA B HB | A HA B HB | A HA B HB | //= | //= | A HA | A HA] /= u i;
-           try by rewrite HA //= HB.
-by rewrite llift_subst.
+Lemma formula_subst_lift (phi: formula) (change_idx: nat) (new_term: term):
+  formula_subst change_idx new_term (formula_lift change_idx 1 phi) = phi.
+Proof.
+  generalize new_term change_idx.
+
+  induction phi as [ | ? IHphi1 ? IHphi2 | ? IHphi1 ? IHphi2 | ? IHphi1 ? IHphi2 | | | ? IHphi | ? IHphi ];
+    simpl; intros.
+
+  (* FAtom *)
+  - rewrite term_subst_lift_iter.
+    reflexivity.
+
+  (* FConj, FDisj, FImp *)
+  - f_equal; [ apply IHphi1 | apply IHphi2 ].
+  - f_equal; [ apply IHphi1 | apply IHphi2 ].
+  - f_equal; [ apply IHphi1 | apply IHphi2 ].
+
+  (* FBot, FTop *)
+  - reflexivity.
+  - reflexivity.
+
+  (* FForAll, FExists *)
+  - f_equal; apply IHphi.
+  - f_equal; apply IHphi.
 Qed.
 
+Lemma formula_eval_S (fcts: nat -> list nat -> nat) (preds: nat -> list nat -> Prop)
+    (phi: formula) (sigma sigma': list nat) (idx: nat):
+  formula_eval fcts preds (sigma ++ idx :: sigma') (formula_lift (length sigma) 1 phi) <->
+    formula_eval fcts preds (sigma ++ sigma') phi.
+Proof.
+  generalize sigma.
 
+  induction phi as [ | ? IHphi1 ? IHphi2 | ? IHphi1 ? IHphi2 | ? IHphi1 ? IHphi2 | | | ? IHphi | ? IHphi ];
+    simpl; intros sigma''.
 
-(* atom, conj, disj, imp, bot, top, top, ffa, fex *)
-Lemma cst F P : forall A u g h,
-     coerce F P (h++(tcoerce F g u)::g) A
- <-> coerce F P (h++g) (subst (length h) (tlift 0 (length h) u) A).
-fix HR 1.
-case => [X l | A B | A B | A B | //= | //= | A | A] /= u g h;
-        try (move: (HR A u g h) => [HRA1 HRA2];
-             move: (HR B u g h) => [HRB1 HRB2]).
-- replace (map (tcoerce F (h ++ tcoerce F g u :: g)) l)
-  with  (map (tcoerce F (h ++ g)) (map (tsubst (length h) (tlift 0 (length h) u)) l))
-  ; first by split.
-    elim: l => [| v l Hl] //=.
-  by rewrite tcst Hl.
-- split; move => [hA hB]; split; auto.
-- split; (move => [hA | hB]; [left | right]); auto.
-- split; move => H1 H2; auto.
-- split; move => H x;
-  move: (HR A u g (x::h)) => [ H1 H2].
-  simpl in H1.
-  replace  (tlift 0 1 (tlift 0 (length h) u))
-    with  (tlift 0 (S (length h)) u).
-apply H1.
-  apply H.
-by rewrite lift_lift.
-apply H2.
-move/(_ x): H => H; rewrite lift_lift in H; apply H.
-- split; move => [x Hx]; exists x;
-                   move: (HR A u g (x::h)) => [ H1 H2].
-  simpl in H1.
-  replace  (tlift 0 1 (tlift 0 (length h) u))
-    with  (tlift 0 (S (length h)) u).
-apply H1.
-  apply Hx.
-by rewrite lift_lift.
-apply H2.
- rewrite lift_lift in Hx; apply Hx.
+  (* FAtom *)
+  - rewrite term_eval_lift_n_iter.
+    reflexivity.
+
+  (* FConj *)
+  - split; intros [].
+    + split; [ apply IHphi1 | apply IHphi2 ]; assumption.
+    + split; [ apply IHphi1 | apply IHphi2 ]; assumption.
+
+  (* FDisj *)
+  - split; intros [];
+      [ left | right | left | right ];
+      [ apply IHphi1 | apply IHphi2 | apply IHphi1 | apply IHphi2 ];
+      assumption.
+
+  (* FImp *)
+  - split.
+    all: intros Hphi ?.
+    all: apply IHphi2, Hphi, IHphi1.
+    all: assumption.
+
+  (* FBot, FTop *)
+  - reflexivity.
+  - reflexivity.
+
+  (* FForAll *)
+  - split; intros Hphi x.
+    all: apply (IHphi (x :: sigma'')).
+    all: apply Hphi.
+
+  (* FExists *)
+  - split; intros [x Heval].
+    all: exists x.
+    all: apply (IHphi (x :: sigma'')).
+    all: apply Heval.
 Qed.
 
+Lemma formula_eval_subst_lift (fcts: nat -> list nat -> nat) (preds: nat -> list nat -> Prop)
+    (phi: formula) (sigma sigma': list nat) (t: term):
+  formula_eval fcts preds (sigma ++ sigma') (formula_subst (length sigma) (term_lift 0 (length sigma) t) phi)
+    <-> formula_eval fcts preds (sigma ++ (term_eval fcts sigma' t) :: sigma') phi.
+Proof.
+  generalize sigma.
 
-Fixpoint clift i j G :=
-  match G with
-  | nil => G
-  | A :: G => (lift i j A) :: (clift i j G)
-  end.
+  induction phi as [ ? terms | ? IHphi1 ? IHphi2 | ? IHphi1 ? IHphi2 | ? IHphi1 ? IHphi2 | | | ? IHphi | ? IHphi ];
+    simpl; intros sigma''.
 
-Lemma clift_lift' : forall G j k,
-    clift (S (j+k)) 1 (clift k 1 G) = clift k 1 (clift (j+k) 1 G).
-elim => [//=|A G /= HG] j k.
-by rewrite lift_lift' HG.
+  (* FAtom *)
+  - replace (map _ _) with (map (term_eval fcts (sigma'' ++ term_eval fcts sigma' t :: sigma')) terms); [ reflexivity |].
+    induction terms as [| ? ? IHterms ]; simpl.
+    { reflexivity. }
+
+    f_equal.
+    + rewrite term_eval_subst_lift.
+      reflexivity.
+    + apply IHterms.
+
+  (* FConj *)
+  - split; intros [].
+    + split; [ apply IHphi1 | apply IHphi2 ]; assumption.
+    + split; [ apply IHphi1 | apply IHphi2 ]; assumption.
+
+  (* FDisj *)
+  - split; intros [];
+      [ left | right | left | right ];
+      [ apply IHphi1 | apply IHphi2 | apply IHphi1 | apply IHphi2 ];
+      assumption.
+
+  (* FImp *)
+  - split.
+    all: intros Hphi ?.
+    all: apply IHphi2, Hphi, IHphi1.
+    all: assumption.
+
+  (* FBot, FTop *)
+  - reflexivity.
+  - reflexivity.
+
+  (* FForAll *)
+  - split; intros Hphi x; simpl.
+    + apply (IHphi (x :: sigma'')).
+      replace (term_lift _ _ _) with (term_lift 0 1 (term_lift 0 (length sigma'') t)).
+      { apply Hphi. }
+
+      rewrite term_lift_0_lift_0.
+      reflexivity.
+
+    + specialize (IHphi (x :: sigma'')).
+      rewrite term_lift_0_lift_0.
+      apply IHphi.
+      apply Hphi.
+
+  (* FExists *)
+  - split; intros [x Hphi]; exists x; simpl.
+    + apply (IHphi (x :: sigma'')).
+      replace (term_lift _ _ _) with (term_lift 0 1 (term_lift 0 (length sigma'') t)).
+      { apply Hphi. }
+
+      rewrite term_lift_0_lift_0.
+      reflexivity.
+
+    + specialize (IHphi (x :: sigma'')).
+      rewrite term_lift_0_lift_0.
+      apply IHphi.
+      apply Hphi.
 Qed.
 
-Lemma clift_lift : forall G i j, clift 0 i (clift 0 j G) =
-                                   clift 0 (i+j) G.
-elim => [//=|A G /= HG] j k.
-by rewrite lift_lift HG.
+Lemma context_lift_0_lift_0 (gamma: list formula) (idx idx': nat):
+  context_lift 0 idx (context_lift 0 idx' gamma) = context_lift 0 (idx + idx') gamma.
+Proof.
+  induction gamma as [| ? ? IHgamma ]; simpl.
+  { reflexivity. }
+
+  f_equal.
+  - rewrite formula_lift_n_lift_n.
+    reflexivity.
+  - apply IHgamma.
 Qed.
 
+Lemma context_lift_S_lift_n (gamma: list formula) (idx idx': nat):
+  context_lift (S (idx + idx')) 1 (context_lift idx 1 gamma) =
+    context_lift idx 1 (context_lift (idx + idx') 1 gamma).
+Proof.
+  induction gamma as [| ? ? IHgamma ]; simpl.
+  { reflexivity. }
 
-
-Lemma clift_app : forall G H j k, clift j k (G++H) = (clift j k G)++(clift j k H).
- by elim => [//=|A G /= HG] H j k; rewrite HG.
+  f_equal.
+  - rewrite formula_lift_S_lift_n.
+    reflexivity.
+  - apply IHgamma.
 Qed.
-  
-Lemma lift_nth i j : forall G k,
-    nth k (clift i j G) ftop = lift i j (nth k G ftop).
-elim => [|A G HG][|k]//=.
+
+Lemma context_lift_app (gamma gamma': list formula) (idx idx': nat):
+  context_lift idx idx' gamma ++ context_lift idx idx' gamma' =
+    context_lift idx idx' (gamma ++ gamma').
+Proof.
+  induction gamma as [| ? ? IHgamma ]; simpl.
+  { reflexivity. }
+
+  rewrite IHgamma.
+  reflexivity.
 Qed.
 
+Lemma formula_lift_nth (gamma: list formula) (n idx idx': nat):
+  nth n (context_lift idx idx' gamma) FTop = formula_lift idx idx' (nth n gamma FTop).
+Proof.
+  generalize n.
+
+  induction gamma as [| ? ? IHgamma ]; simpl.
+  { intros []; reflexivity. }
+
+  intros [].
+  - reflexivity.
+  - apply IHgamma.
+Qed.
