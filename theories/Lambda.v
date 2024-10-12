@@ -61,25 +61,24 @@ Proof.
 Qed.
 
 Lemma type_subst :
-  forall (Gamma : var -> type) (s : term) (A : type) (sigma : var -> term),
+  forall (Gamma Delta : var -> type) (s : term) (A : type) (sigma : var -> term),
     types Gamma s A ->
-    (forall (x:var) (B:type) , Gamma x = B -> types Gamma (sigma x) B) ->
-    types Gamma s.[sigma] A.
+    (forall (x:var) , types Delta (sigma x) (Gamma x)) ->
+    types Delta s.[sigma] A.
 Proof.
-  intros Gamma s. revert Gamma. induction s; intros; simpl.
-  - apply H0. inversion H. subst. reflexivity.
+  intros Gamma Delta s. revert Gamma Delta. induction s; intros; simpl.
+  - inversion H. subst. apply H0.
   - inversion H. subst. eapply Types_app.
-    + apply IHs1.
+    + eapply IHs1.
       * apply H3.
       * assumption.
-    + apply IHs2; assumption.
-  - inversion H. subst. constructor. apply IHs.
-    + assumption.
-    + intros. destruct x.
-      * simpl in H1. subst. constructor. reflexivity.
-      * simpl in H1. apply H0 in H1 as E. asimpl.
-        eapply type_weakening.
-        -- apply E.
+    + eapply IHs2; eassumption.
+  - inversion H. subst. constructor. eapply IHs.
+    + eassumption.
+    + intros x. destruct x.
+      * constructor. reflexivity.
+      * asimpl. eapply type_weakening.
+        -- apply H0.
         -- asimpl. reflexivity.
 Qed.
 
@@ -87,6 +86,19 @@ Lemma type_pres :
   forall (Gamma : var -> type) (s t : term) (A : type),
     types Gamma s A -> step s t -> types Gamma t A.
 Proof.
-  intros Gamma s t A Hty Hstep. induction Hstep.
-  - inversion Hty. inversion H2. subst. Abort.
-       (* substitution lemma not strong enough *)
+  intros Gamma s. revert Gamma. induction s; intros; asimpl; auto.
+  - inversion H0.
+  - inversion H0; subst.
+    + inversion H; subst. inversion H3; subst.
+      eapply type_subst.
+      * eassumption.
+      * intros [|x]; asimpl; auto. constructor. reflexivity.
+    + inversion H. subst. econstructor.
+      * apply IHs1; eassumption.
+      * assumption.
+    + inversion H. subst. econstructor.
+      * eassumption.
+      * apply IHs2; assumption.
+  - inversion H0. subst. inversion H. subst.
+    constructor. apply IHs; assumption.
+Qed.
