@@ -178,6 +178,40 @@ Proof.
   - apply IHterms.
 Qed.
 
+Lemma term_subst_lift_S (t new_term: term) (idx idx': nat):
+  term_subst idx (term_lift (idx + idx') 1 new_term) (term_lift (S (idx + idx')) 1 t) =
+    term_lift (idx + idx') 1 (term_subst idx new_term t).
+Proof.
+  induction t as [ n | ? terms IHterms ]; simpl.
+  2: { f_equal; solve_TApp_case terms IHterms. }
+
+  destruct (PeanoNat.Nat.ltb_spec n (S (idx + idx'))); simpl.
+  - destruct (PeanoNat.Nat.eqb_spec idx n); [ reflexivity |].
+    destruct (PeanoNat.Nat.ltb_spec idx n); simpl.
+    + destruct (PeanoNat.Nat.ltb_spec (n - 1) (idx + idx')); [| lia ].
+      reflexivity.
+    + destruct (PeanoNat.Nat.ltb_spec n (idx + idx')); [| lia ].
+      reflexivity.
+
+  - destruct (PeanoNat.Nat.eqb_spec idx (n + 1)); [ lia |].
+    destruct (PeanoNat.Nat.ltb_spec idx (n + 1)); [| lia ].
+    destruct (PeanoNat.Nat.eqb_spec idx n); [ lia |].
+    destruct (PeanoNat.Nat.ltb_spec idx n); simpl; [| lia ].
+    destruct (PeanoNat.Nat.ltb_spec (n - 1) (idx + idx')); [ lia |].
+    f_equal; lia.
+Qed.
+
+Lemma term_subst_lift_S_iter (terms: list term) (new_term: term) (idx idx': nat):
+  map (term_subst idx (term_lift (idx + idx') 1 new_term)) (map (term_lift (S (idx + idx')) 1) terms) =
+    map (term_lift (idx + idx') 1) (map (term_subst idx new_term) terms).
+Proof.
+  induction terms as [| ? ? IHterms ]; simpl.
+  { reflexivity. }
+
+  rewrite term_subst_lift_S.
+  f_equal; assumption.
+Qed.
+
 Lemma term_eval_lift_n (fcts: nat -> list nat -> nat) (sigma sigma': list nat) (idx: nat) (t: term):
   term_eval fcts (sigma ++ (idx :: sigma')) (term_lift (length sigma) 1 t) =
     term_eval fcts (sigma ++ sigma') t.
@@ -299,6 +333,19 @@ Proof.
   - f_equal; apply IHphi.
 Qed.
 
+Lemma formula_lift_nth (gamma: list formula) (n idx idx': nat):
+  nth n (context_lift idx idx' gamma) FTop = formula_lift idx idx' (nth n gamma FTop).
+Proof.
+  generalize n.
+
+  induction gamma as [| ? ? IHgamma ]; simpl.
+  { intros []; reflexivity. }
+
+  intros [].
+  - reflexivity.
+  - apply IHgamma.
+Qed.
+
 Lemma formula_subst_lift (phi: formula) (change_idx: nat) (new_term: term):
   formula_subst change_idx new_term (formula_lift change_idx 1 phi) = phi.
 Proof.
@@ -323,6 +370,43 @@ Proof.
   (* FForAll, FExists *)
   - f_equal; apply IHphi.
   - f_equal; apply IHphi.
+Qed.
+
+Lemma formula_subst_lift_lift (phi: formula) (idx idx': nat) (new_term: term):
+  formula_subst idx (term_lift (idx + idx') 1 new_term) (formula_lift (S (idx + idx')) 1 phi) =
+    formula_lift (idx + idx') 1 (formula_subst idx new_term phi).
+Proof.
+  generalize idx idx' new_term.
+
+  induction phi as [ | ? IHphi1 ? IHphi2 | ? IHphi1 ? IHphi2 | ? IHphi1 ? IHphi2 | | | ? IHphi | ? IHphi ];
+    simpl; intros idx'' idx''' new_term'.
+
+  (* FAtom *)
+  - rewrite term_subst_lift_S_iter.
+    reflexivity.
+
+  (* FConj, FDisj, FImp *)
+  - f_equal; [ apply IHphi1 | apply IHphi2 ].
+  - f_equal; [ apply IHphi1 | apply IHphi2 ].
+  - f_equal; [ apply IHphi1 | apply IHphi2 ].
+
+  (* FBot, FTop *)
+  - reflexivity.
+  - reflexivity.
+
+  (* FForAll *)
+  - f_equal.
+    replace (S (idx'' + idx''')) with ((S idx'') + idx''') by lia.
+    rewrite <- IHphi.
+    rewrite <- term_lift_S_lift_0.
+    reflexivity.
+
+  (* FExists *)
+  - f_equal.
+    replace (S (idx'' + idx''')) with ((S idx'') + idx''') by lia.
+    rewrite <- IHphi.
+    rewrite <- term_lift_S_lift_0.
+    reflexivity.
 Qed.
 
 Lemma formula_eval_S (fcts: nat -> list nat -> nat) (preds: nat -> list nat -> Prop)
@@ -476,17 +560,4 @@ Proof.
 
   rewrite IHgamma.
   reflexivity.
-Qed.
-
-Lemma formula_lift_nth (gamma: list formula) (n idx idx': nat):
-  nth n (context_lift idx idx' gamma) FTop = formula_lift idx idx' (nth n gamma FTop).
-Proof.
-  generalize n.
-
-  induction gamma as [| ? ? IHgamma ]; simpl.
-  { intros []; reflexivity. }
-
-  intros [].
-  - reflexivity.
-  - apply IHgamma.
 Qed.
