@@ -102,3 +102,49 @@ Proof.
   - inversion H0. subst. inversion H. subst.
     constructor. apply IHs; assumption.
 Qed.
+
+(** STRONG NORMALISATION PROOF *)
+
+Inductive sn : term -> Prop :=
+| Strong (t : term) :
+  (forall (t' : term), step t t' -> sn t') -> sn t.
+
+Example sn_var : forall (n : var), sn (Var n).
+Proof.
+  constructor. intros. inversion H.
+Qed.
+
+Fixpoint reducible (A : type) (t : term) : Prop :=
+  match A with
+  | Base => sn t
+  | Arr A B => forall (u : term), reducible A u -> reducible B (App t u)
+  end.
+
+Definition neutral (t : term) : Prop :=
+  match t with
+  | Lam _ => False
+  | _ => True
+  end.
+
+Lemma sn_app_var : forall (t : term) (n : var), sn (App t (Var n)) -> sn t.
+Proof.
+  intros t n Hsn. Check sn_ind.
+
+Lemma reducible_is_sn :
+  forall (A : type),
+  (forall (t : term), reducible A t -> sn t)  /\
+    (forall (t u : term), reducible A t -> step t u -> reducible A u) /\
+    (forall (t : term), neutral t -> (forall t':term, step t t' -> reducible A t') -> reducible A t).
+Proof.
+  induction A as [| A [IHA1 [IHA2 IHA3]] B [IHB1 [IHB2 IHB3]]].
+  - split; split.
+    + simpl in H. inversion H. assumption.
+    + simpl. intros t u H Hstep. inversion H. subst. auto.
+    + simpl. intros t _ H. constructor. assumption.
+  - split; split.
+    + assert (E0 : reducible A (Var 0)). {
+        apply IHA3.
+        * simpl. auto.
+        * intros. inversion H0.
+      }
+      simpl in H. apply H in E0. apply IHB1 in E0.
