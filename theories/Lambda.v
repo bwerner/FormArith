@@ -126,9 +126,43 @@ Definition neutral (t : term) : Prop :=
   | _ => True
   end.
 
-Lemma sn_app_var : forall (t : term) (n : var), sn (App t (Var n)) -> sn t.
+Lemma sn_lam : forall (t : term),
+    sn t -> sn (Lam t).
 Proof.
-  intros t n Hsn. Check sn_ind.
+  apply sn_ind.
+  intros. constructor.
+  intros t' Hstep.
+  inversion Hstep. subst. apply H0. assumption.
+Qed.
+
+Inductive sub_term : term -> term -> Prop :=
+| Sub_app1 (t1 t2 : term) : sub_term t1 (App t1 t2)
+| Sub_app2 (t1 t2 : term) : sub_term t2 (App t1 t2)
+| Sub_lam (t : term) : sub_term t (Lam t).
+
+Lemma sn_sub_term : forall (t : term),
+    sn t -> (forall t':term, sub_term t' t -> sn t').
+Proof.
+  intros t H. induction H.
+  intros t' Hsub. inversion Hsub; subst.
+  - constructor. intros u Hstep.
+    eapply H0.
+    + constructor. apply Hstep.
+    + constructor.
+  - constructor. intros u Hstep. eapply H0.
+    + apply Step_app2. apply Hstep.
+    + constructor.
+  - constructor. intros u Hstep. eapply H0.
+    + constructor. apply Hstep.
+    + constructor.
+Qed.
+
+Corollary sn_var_app : forall (t : term) (n :var), sn (App t (Var n)) -> sn t.
+Proof.
+  intros t n H. apply (sn_sub_term (App t (Var n))).
+  - assumption.
+  - constructor.
+Qed.
 
 Lemma reducible_is_sn :
   forall (A : type),
@@ -148,3 +182,4 @@ Proof.
         * intros. inversion H0.
       }
       simpl in H. apply H in E0. apply IHB1 in E0.
+      Abort.
