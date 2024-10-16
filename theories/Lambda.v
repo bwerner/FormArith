@@ -208,7 +208,35 @@ Qed.
 
 Lemma typing_is_reducible :
   forall (Gamma : var -> type) (sigma : var -> term),
-    (forall (A:type) (x:var), reducible (Gamma x) (sigma x)) ->
+    (forall (x:var), reducible (Gamma x) (sigma x)) ->
     forall (A:type) (t:term), types Gamma t A -> reducible A t.[sigma].
 Proof.
+  intros Gamma sigma adapted A t.
+  generalize dependent A.
+  generalize dependent sigma.
+  induction t; intros sigma adapted A wellTyped.
+  - simpl.
+    inversion wellTyped.
+    subst.
+    apply adapted.
+  - simpl.
+    inversion wellTyped.
+    subst.
+    rename A0 into B.
+    apply (IHt1 sigma adapted) in H1.
+    apply (IHt2 sigma adapted) in H3.
+    simpl in H1.
+    apply H1.
+    apply H3.
+  - simpl.
+    inversion wellTyped.
+    subst.
+    rename A0 into A.
+    (*
+    specialize (IHt (up sigma)).
+    *)
+    
+    
+    
+    
   Admitted.
