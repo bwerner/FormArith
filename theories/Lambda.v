@@ -192,9 +192,16 @@ Proof.
      * apply Hredt.
        assumption.
      * constructor. assumption.
-   + admit.
-     (*Last case here he uses strong induction on the path length*)
-Admitted.
-     
-     
-     
+   + simpl. intros t Hneu Hredt u Hredu.
+     apply IHA1 in Hredu as Hsnu. induction Hsnu as [u _ IHu].
+     assert (E : forall v:term, step (App t u) v -> reducible B v). {
+       intros v Hstep. inversion Hstep; subst.
+       * destruct Hneu.
+       * apply Hredt; assumption.
+       * apply (IHu t').
+         -- assumption.
+         -- apply (IHA2 u); assumption. }
+     apply IHB3.
+     * split.
+     * apply E.
+Qed.
