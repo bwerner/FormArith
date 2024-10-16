@@ -205,3 +205,10 @@ Proof.
      * split.
      * apply E.
 Qed.
+
+Lemma typing_is_reducible :
+  forall (Gamma : var -> type) (sigma : var -> term),
+    (forall (A:type) (x:var), reducible (Gamma x) (sigma x)) ->
+    forall (A:type) (t:term), types Gamma t A -> reducible A t.[sigma].
+Proof.
+  Admitted.
