@@ -164,6 +164,9 @@ Proof.
   - constructor.
 Qed.
 
+Check sn_ind.
+
+
 Lemma reducible_is_sn :
   forall (A : type),
   (forall (t : term), reducible A t -> sn t)  /\
@@ -206,15 +209,27 @@ Proof.
      * apply E.
 Qed.
 
+
+Lemma sn_subst : forall (t : term) (sigma : var -> term),
+    sn t -> (forall u:term, t = u.[sigma] -> sn u).
+Proof.
+  intros t sigma Hsn. induction Hsn as [t _ IHt].
+  intros u Hsubst. constructor.
+  intros v Hstep. specialize (IHt v.[sigma]). apply IHt; auto.
+  rewrite Hsubst. apply step_subst. assumption.
+Qed.
+
+
 Lemma typing_is_reducible :
   forall (Gamma : var -> type) (sigma : var -> term),
     (forall (x:var), reducible (Gamma x) (sigma x)) ->
     forall (A:type) (t:term), types Gamma t A -> reducible A t.[sigma].
 Proof.
   intros Gamma sigma adapted A t.
+  generalize dependent Gamma.
   generalize dependent A.
   generalize dependent sigma.
-  induction t; intros sigma adapted A wellTyped.
+  induction t; intros sigma A Gamma adapted wellTyped.
   - simpl.
     inversion wellTyped.
     subst.
@@ -223,16 +238,28 @@ Proof.
     inversion wellTyped.
     subst.
     rename A0 into B.
-    apply (IHt1 sigma adapted) in H1.
-    apply (IHt2 sigma adapted) in H3.
+    apply IHt1 with (sigma := sigma) in H1; try assumption.
+    apply IHt2 with (sigma := sigma) in H3; try assumption.
     simpl in H1.
     apply H1.
     apply H3.
   - simpl.
     inversion wellTyped.
     subst.
-    rename A0 into A.
-    (*
+    rename A0 into A. simpl.
+    intros u Hredu. specialize (reducible_is_sn B). intros [ Hsn [ Hstable Hred ]].
+    apply Hred. { split. }
+    apply IHt with (sigma := up sigma) in H0 as Hreds.
+    + specialize (reducible_is_sn A) as [ HsnA _]. apply HsnA in Hredu as Hsnu. clear HsnA.
+      apply Hsn in Hreds as Hsns.
+      induction Hsnu as [u _ IHu]. eapply sn_subst in Hsns as Hsns'; auto.
+      induction Hsns' as [s _ IHs].
+      intros v Hstep. inversion Hstep; subst.
+      * asimpl. apply IHt with (Gamma := A .: Gamma); auto.
+        intros [| x]; simpl. apply Hredu. apply adapted.
+      * admit. (* STUCK AHHHHHHH*)
+
+(*
     specialize (IHt (up sigma)).
     *)
     
