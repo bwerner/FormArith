@@ -182,4 +182,19 @@ Proof.
         * intros. inversion H0.
       }
       simpl in H. apply H in E0. apply IHB1 in E0.
-      Abort.
+      apply sn_var_app in E0.
+      inversion E0.
+      subst.
+      assumption.
+   + intros t t' Hredt Hstep.
+     intros u Hredu.
+     apply IHB2 with (App t u).
+     * apply Hredt.
+       assumption.
+     * constructor. assumption.
+   + admit.
+     (*Last case here he uses strong induction on the path length*)
+Admitted.
+     
+     
+     
