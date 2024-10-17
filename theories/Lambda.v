@@ -219,6 +219,52 @@ Proof.
   rewrite Hsubst. apply step_subst. assumption.
 Qed.
 
+Lemma sn_ind_pair :
+  forall (P : term -> term -> Prop),
+    (forall t u, (forall t' u', ((t = t' /\ step u u') \/ (step t t' /\ u = u')) -> P t' u') -> P t u) ->
+    forall t u, sn t -> sn u -> P t u.
+Proof.
+  intros P IH t u Hsnt.
+  assert (forall u, sn u -> P t u). {
+    induction Hsnt as [t _ IHt].
+    intros v Hsnv. induction Hsnv as [v Hsnv IHv].
+    apply IH. intros t' v' [[H1 H2] | [H1 H2]]; subst.
+    - apply IHv. apply H2.
+    - apply IHt.
+      + assumption.
+      + constructor. assumption.
+  }
+  apply H.
+Qed.
+
+
+Lemma reducible_abs :
+  forall (v : term) (A B : type),
+    (forall (u:term), reducible A u -> reducible B v.[u/]) -> reducible (Arr A B) (Lam v).
+Proof.
+  intros v A B H u Hredu.
+  specialize (reducible_is_sn A) as [HA1 [HA2 HA3]].
+  specialize (reducible_is_sn B) as [HB1 [HB2 HB3]].
+  apply HA1 in Hredu as Hsnu.
+  assert (Hsnv : sn v). {
+    apply H in Hredu. apply HB1 in Hredu. apply sn_subst with (t := v.[u/]) (sigma := u .: ids); auto.
+  }
+  revert H Hredu. apply sn_ind_pair with (t := v) (u := u).
+  - intros x y IH H Hred. apply HB3. { split. }
+    intros t Hstep. inversion Hstep; subst.
+    + apply H. apply Hred.
+    + inversion H3. subst. apply IH.
+      * auto.
+      * intros z Hz. apply H in Hz. apply (HB2 x.[z/]); auto.
+        apply step_subst. assumption.
+      * apply Hred.
+    + apply IH.
+      * auto.
+      * apply H.
+      * apply (HA2 y); auto.
+  - apply Hsnv.
+  - apply Hsnu.
+Qed.
 
 Lemma typing_is_reducible :
   forall (Gamma : var -> type) (sigma : var -> term),
@@ -243,27 +289,8 @@ Proof.
     simpl in H1.
     apply H1.
     apply H3.
-  - simpl.
-    inversion wellTyped.
-    subst.
-    rename A0 into A. simpl.
-    intros u Hredu. specialize (reducible_is_sn B). intros [ Hsn [ Hstable Hred ]].
-    apply Hred. { split. }
-    apply IHt with (sigma := up sigma) in H0 as Hreds.
-    + specialize (reducible_is_sn A) as [ HsnA _]. apply HsnA in Hredu as Hsnu. clear HsnA.
-      apply Hsn in Hreds as Hsns.
-      induction Hsnu as [u _ IHu]. eapply sn_subst in Hsns as Hsns'; auto.
-      induction Hsns' as [s _ IHs].
-      intros v Hstep. inversion Hstep; subst.
-      * asimpl. apply IHt with (Gamma := A .: Gamma); auto.
-        intros [| x]; simpl. apply Hredu. apply adapted.
-      * admit. (* STUCK AHHHHHHH*)
-
-(*
-    specialize (IHt (up sigma)).
-    *)
-    
-    
-    
-    
-  Admitted.
+  - simpl.  inversion wellTyped. subst. rename A0 into A.
+    apply reducible_abs.
+    intros u Hredu. asimpl. eapply IHt; eauto.
+    intros [| x]; simpl; auto.
+Qed.
