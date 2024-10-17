@@ -225,17 +225,16 @@ Lemma sn_ind_pair :
     forall t u, sn t -> sn u -> P t u.
 Proof.
   intros P IH t u Hsnt.
-  assert (forall u, sn u -> P t u). {
-    induction Hsnt as [t _ IHt].
-    intros v Hsnv. induction Hsnv as [v Hsnv IHv].
-    apply IH. intros t' v' [[H1 H2] | [H1 H2]]; subst.
-    - apply IHv. apply H2.
-    - apply IHt.
-      + assumption.
-      + constructor. assumption.
-  }
-  apply H.
+  revert u.
+  induction Hsnt as [t _ IHt].
+  intros v Hsnv. induction Hsnv as [v Hsnv IHv].
+  apply IH. intros t' v' [[H1 H2] | [H1 H2]]; subst.
+  - apply IHv. apply H2.
+  - apply IHt.
+    + assumption.
+    + constructor. assumption.
 Qed.
+
 
 
 Lemma reducible_abs :
@@ -266,6 +265,17 @@ Proof.
   - apply Hsnu.
 Qed.
 
+Lemma reducible_var : forall x A Gamma, types Gamma (Var x) A -> reducible A (Var x).
+Proof.
+  intros x A Gamma wt.
+  destruct A.
+  - simpl. apply sn_var.
+  - apply reducible_is_sn.
+    + split.
+    + intros t' H.
+      inversion H.
+Qed.
+
 Lemma typing_is_reducible :
   forall (Gamma : var -> type) (sigma : var -> term),
     (forall (x:var), reducible (Gamma x) (sigma x)) ->
@@ -294,3 +304,23 @@ Proof.
     intros u Hredu. asimpl. eapply IHt; eauto.
     intros [| x]; simpl; auto.
 Qed.
+
+Corollary STLC_is_SN : forall Gamma A t, types Gamma t A -> sn t.
+Proof.
+  intros Gamma A t wellTyped.
+  apply (reducible_is_sn A).
+  specialize (typing_is_reducible Gamma ids).
+  intro H.
+  asimpl in H.
+  apply H.
+  - intro x.
+    apply reducible_var with Gamma.
+    constructor.
+    reflexivity.
+  - assumption.
+Qed.
+    
+    
+   
+  
+  
