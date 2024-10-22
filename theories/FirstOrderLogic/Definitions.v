@@ -1,6 +1,6 @@
-Require Export List Nat.
+From FormArith Require Export Base.
 
-#[export] Set Default Goal Selector "!".
+Require Export List.
 
 Unset Elimination Schemes.
 
