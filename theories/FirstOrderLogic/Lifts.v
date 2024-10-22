@@ -1,4 +1,4 @@
-From FormArith Require Import Definitions.
+From FormArith.FirstOrderLogic Require Import Definitions.
 
 Require Import Lia.
 

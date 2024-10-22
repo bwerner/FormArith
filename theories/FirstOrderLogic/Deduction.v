@@ -1,4 +1,4 @@
-From FormArith Require Import Definitions Lifts.
+From FormArith.FirstOrderLogic Require Import Definitions Lifts.
 
 Require Import Lia.
 
