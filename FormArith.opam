@@ -1,0 +1,12 @@
+opam-version: "2.0"
+synopsis: "Formalising first-order logic, arithmetic and cut elimination"
+maintainer: "Benjamin Werner"
+authors: "FormArith contributors"
+homepage: "https://github.com/bwerner/FormArith"
+bug-reports: "https://github.com/bwerner/FormArith/issues"
+depends: [
+  "coq" { (= "8.17.1" ) }
+  "dune" {>= "3.8"}
+]
+build: ["dune" "build" "-p" name "-j" jobs]
+
