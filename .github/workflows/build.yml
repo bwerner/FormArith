@@ -1,0 +1,24 @@
+name: build
+
+on: [fork, pull_request, push, workflow_dispatch]
+
+concurrency:
+  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Prepare Nix installation
+      uses: cachix/install-nix-action@v30
+
+    - name: Install dependencies
+      run: nix build .#theories.inputDerivation
+
+    - name: Build the project
+      run: nix build .#theories

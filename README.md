@@ -11,7 +11,7 @@ There are two maintained ways to do this, using `nix` (preferred) or `opam`.
 
 We assume that you have `nix` installed on your system. Setup instructions can be found here: <https://nixos.org/download>.
 
-To setup the project for development purposes, you can use `nix develop` to enter an interactive subshell containing the tools you will need:
+1. You can use `nix develop` to enter an interactive subshell containing the tools you will need:
 
 ```bash
 cd <form-arith>
@@ -19,6 +19,12 @@ nix develop
 ``` 
 
 The tools lives in this subshell and will disappear as soon as you leave the subshell.
+
+2. Build the Rocq implementation:
+
+```bash
+dune build
+```
 
 If you do not have flakes enabled, you may get this error:
 
@@ -47,7 +53,7 @@ opam pin add coq 8.19.2
 opam repo add coq-released https://coq.inria.fr/opam/released
 ```
 
-3. Build the Rocq implementation of the type system:
+3. Build the Rocq implementation:
 
 ```bash
 dune build

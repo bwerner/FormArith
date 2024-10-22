@@ -9,4 +9,4 @@ depends: [
   "dune" {>= "3.8"}
 ]
 build: ["dune" "build" "-p" name "-j" jobs]
-
+install: ["dune" "install" "-p" name]
