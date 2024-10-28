@@ -18,13 +18,28 @@
       in
       rec {
         packages = {
-          theories = coqPackages.mkCoqDerivation rec {
+          theories = let
+            autosubst = coqPackages.mkCoqDerivation {
+              pname = "autosubst";
+              version = "1.9";
+
+              # The tarball is not present in the release
+              src = pkgs.fetchFromGitHub {
+                owner = "coq-community";
+                repo = "autosubst";
+                rev = "v1.9";
+                sha256 = "sha256-XiLZjMc+1iwRGOstfLm/WQRF6FTdX6oJr5urn3wmLlA=";
+              };
+            };
+          in coqPackages.mkCoqDerivation rec {
             pname = "FormArith";
             opam-name = "FormArith";
             version = "0.1.0";
 
             src = ./.;
             useDune = true;
+
+            propagatedBuildInputs = [ autosubst ];
           };
 
           default = packages.theories;
