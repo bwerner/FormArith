@@ -1,6 +1,6 @@
-From Autosubst Require Import Autosubst.
+From FormArith Require Export Base.
 
-Check subst_comp.
+From Autosubst Require Import Autosubst.
 
 Inductive term : Type :=
 | Var (n : var)
@@ -277,8 +277,3 @@ Proof.
   asimpl in H.
   eauto with typingSTLC.
 Qed.
-    
-    
-   
-  
-  

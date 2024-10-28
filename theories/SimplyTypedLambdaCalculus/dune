@@ -1,4 +1,4 @@
 (coq.theory
   (name FormArith.SimplyTypedLambdaCalculus)
   (package FormArith)
-  (theories FormArith))
+  (theories Autosubst FormArith))
