@@ -13,35 +13,39 @@ Instance Subst_term: Subst term. derive. Defined.
 Instance SubstLemmas_term: SubstLemmas term. derive. Defined.
 
 
-Inductive step: term -> term -> Prop :=
-  | Step_beta (s s' t: term): s' = s.[t .: ids] -> step (App (Lam s) t) s'
-  | Step_app1 (s s' t: term): step s s' -> step (App s t) (App s' t)
-  | Step_app2 (s t t': term): step t t' -> step (App s t) (App s t')
-  | Step_lam (s s': term): step s s' -> step (Lam s) (Lam s').
+Reserved Notation "t ->β t'" (at level 60).
 
-Lemma step_subst (t t': term) (sigma: var -> term):
-  step t t' -> step t.[sigma] t'.[sigma].
+Inductive beta: term -> term -> Prop :=
+  | Beta_subst (s s' t: term): s' = s.[t .: ids] -> (App (Lam s) t) ->β s'
+  | Beta_AppL (s s' t: term): s ->β s' -> App s t ->β App s' t
+  | Beta_AppR (s t t': term): t ->β t' -> App s t ->β App s t'
+  | Beta_Lam (s s': term): s ->β s' -> Lam s ->β Lam s'
+  where "t ->β t'" := (beta t t').
+
+
+Lemma beta_subst (t t': term) (σ: var -> term):
+  t ->β t' -> t.[σ] ->β t'.[σ].
 Proof.
-  revert t' sigma.
+  revert t' σ.
 
   induction t as [ | ? IHs ? IHt | s IHs ].
   - inversion 1.
 
   - inversion 1; subst; simpl.
-    + apply Step_beta.
+    + apply Beta_subst.
       asimpl.
       reflexivity.
 
-    + apply Step_app1.
+    + apply Beta_AppL.
       apply IHs.
       assumption.
 
-    + apply Step_app2.
+    + apply Beta_AppR.
       apply IHt.
       assumption.
 
   - inversion 1; subst; simpl.
-    apply Step_lam.
+    apply Beta_Lam.
     apply IHs.
     assumption.
 Qed.
@@ -51,86 +55,89 @@ Inductive type :=
   | Base
   | Arr (A B: type).
 
-Inductive types (Gamma: var -> type): term -> type -> Prop :=
-  | Types_var (x: var) (A: type):
-      Gamma x = A -> types Gamma (Var x) A
+Reserved Notation "Γ ⊢ t : A" (at level 60, t at next level).
 
-  | Types_app (s t: term) (A B: type) :
-      types Gamma s (Arr A B) ->
-      types Gamma t A ->
-      types Gamma (App s t) B
+Inductive typing (Γ: var -> type): term -> type -> Prop :=
+  | Typing_Var (x: var) (A: type):
+      Γ x = A -> Γ ⊢ Var x : A
 
-  | Types_lam (s: term) (A B: type):
-      types (A .: Gamma) s B ->
-      types Gamma (Lam s) (Arr A B).
+  | Typing_App (s t: term) (A B: type) :
+      Γ ⊢ s : Arr A B ->
+      Γ ⊢ t : A ->
+      Γ ⊢ App s t : B
 
-Lemma type_weakening (gamma: var -> type) (s: term) (A: type):
-  types gamma s A ->
-    forall (gamma': var -> type) (x': var -> var),
-      gamma = x' >>> gamma' -> types gamma' s.[ren x'] A.
+  | Typing_Lam (s: term) (A B: type):
+      A .: Γ ⊢ s : B ->
+      Γ ⊢ Lam s : Arr A B
+  where "Γ ⊢ t : A" := (typing Γ t A).
+
+Lemma type_weakening (Γ: var -> type) (s: term) (A: type):
+  Γ ⊢ s : A ->
+    forall (Γ': var -> type) (x': var -> var),
+      Γ = x' >>> Γ' -> Γ' ⊢ s.[ren x'] : A.
 Proof.
   induction 1 as [ ? ? ? H | ? ? ? A ? _ IH1 _ IH2 | ? ? ? ? _ IH ]; intros ? ? H'; simpl.
-  - apply Types_var.
+  - apply Typing_Var.
     rewrite H' in H; simpl in H.
     assumption.
 
-  - apply Types_app with A.
+  - apply Typing_App with A.
     + now apply IH1.
     + now apply IH2.
 
-  - apply Types_lam; asimpl.
+  - apply Typing_Lam; asimpl.
     apply IH.
     now rewrite H'; asimpl.
 Qed.
 
-Lemma type_subst (gamma gamma': var -> type) (s: term) (A: type) (sigma: var -> term):
-  types gamma s A ->
-  (forall (x: var) , types gamma' (sigma x) (gamma x)) ->
-  types gamma' s.[sigma] A.
+Lemma type_subst (Γ Γ': var -> type) (s: term) (A: type) (σ: var -> term):
+  Γ ⊢ s : A ->
+  (forall (x: var) , Γ' ⊢ σ x : Γ x) ->
+  Γ' ⊢ s.[σ] : A.
 Proof.
-  revert gamma gamma' A sigma.
+  revert Γ Γ' A σ.
 
-  induction s as [ | ? IH1 ? IH2 | ? IH ]; intros gamma gamma' ? ? Hgamma Hgamma'; simpl.
-  all: inversion Hgamma as [ | ? ? A' | ? A' ]; subst.
+  induction s as [ | ? IH1 ? IH2 | ? IH ]; intros Γ Γ' ? ? HΓ HΓ'; simpl.
+  all: inversion HΓ as [ | ? ? A' | ? A' ]; subst.
 
-  - apply Hgamma'.
-  - apply Types_app with A'.
-    + now apply IH1 with gamma.
-    + now apply IH2 with gamma.
-  - apply Types_lam.
-    apply IH with (A' .: gamma); [ assumption |].
+  - apply HΓ'.
+  - apply Typing_App with A'.
+    + now apply IH1 with Γ.
+    + now apply IH2 with Γ.
+  - apply Typing_Lam.
+    apply IH with (A' .: Γ); [ assumption |].
     intros [| x ]; asimpl.
-    + now apply Types_var.
-    + now apply type_weakening with gamma'.
+    + now apply Typing_Var.
+    + now apply type_weakening with Γ'.
 Qed.
 
-Lemma type_preservation (gamma: var -> type) (s t: term) (A: type):
-  types gamma s A -> step s t -> types gamma t A.
+Lemma type_preservation (Γ: var -> type) (s t: term) (A: type):
+  Γ ⊢ s : A -> s ->β t -> Γ ⊢ t : A.
 Proof.
-  revert gamma t A.
+  revert Γ t A.
 
-  induction s as [ | ? IH1 ? IH2 | ? IH ]; intros gamma ? ? Hgamma Hgamma'; asimpl.
-  all: inversion Hgamma; subst.
-  all: inversion Hgamma' as [ s' | | | ]; subst.
+  induction s as [ | ? IH1 ? IH2 | ? IH ]; intros Γ ? ? HΓ HΓ'; asimpl.
+  all: inversion HΓ; subst.
+  all: inversion HΓ' as [ s' | | | ]; subst.
 
   all: match goal with
-       | H: types _ _ (Arr ?A _) |- _ => rename A into A'
+       | H: _ ⊢ _ : Arr ?A _ |- _ => rename A into A'
        end.
 
   - match goal with
-    | H: types gamma (Lam s') _ |- _ => inversion H; subst
+    | H: Γ ⊢ Lam s' : _ |- _ => inversion H; subst
     end.
 
-    apply type_subst with (A' .: gamma); [ assumption |].
+    apply type_subst with (A' .: Γ); [ assumption |].
     intros [| x ]; asimpl; [ assumption |].
-    now apply Types_var.
+    now apply Typing_Var.
 
-  - apply Types_app with A'; [| assumption ].
+  - apply Typing_App with A'; [| assumption ].
     now apply IH1.
 
-  - apply Types_app with A'; [ assumption |].
+  - apply Typing_App with A'; [ assumption |].
     now apply IH2.
 
-  - apply Types_lam.
+  - apply Typing_Lam.
     now apply IH.
 Qed.
