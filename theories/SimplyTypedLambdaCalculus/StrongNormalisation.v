@@ -3,7 +3,7 @@ From FormArith.SimplyTypedLambdaCalculus Require Import Definitions.
 
 Inductive SN: term -> Prop :=
   | Strong (t: term) :
-      (forall (t': term), step t t' -> SN t') -> SN t.
+      (forall (t': term), t ->β t' -> SN t') -> SN t.
 
 Fixpoint reducible (A: type) (t: term): Prop :=
   match A with
@@ -29,8 +29,8 @@ Proof.
   revert t.
 
   apply SN_ind; intros ? _ H.
-  apply Strong; intros ? Hstep.
-  inversion Hstep; subst.
+  apply Strong; intros ? Hbeta.
+  inversion Hbeta; subst.
   now apply H.
 Qed.
 
@@ -47,15 +47,15 @@ Proof.
        end.
 
   - apply IH with (App u t2).
-    + now apply Step_app1.
+    + now apply Beta_AppL.
     + apply Sub_app1.
 
   - apply IH with (App t1 u).
-    + now apply Step_app2.
+    + now apply Beta_AppR.
     + apply Sub_app2.
 
   - apply IH with (Lam u).
-    + now apply Step_lam.
+    + now apply Beta_Lam.
     + apply Sub_lam.
 Qed.
 
@@ -68,15 +68,15 @@ Proof.
 Qed.
 
 Lemma SN_inverted (t: term):
-  SN t -> forall (t': term), step t t' -> SN t'.
+  SN t -> forall (t': term), t ->β t' -> SN t'.
 Proof.
   now inversion 1.
 Qed.
 
 Lemma reducible_is_SN (A : type):
   (forall (t: term), reducible A t -> SN t) /\
-    (forall (t u: term), reducible A t -> step t u -> reducible A u) /\
-    (forall (t: term), neutral t -> (forall (t': term), step t t' -> reducible A t') -> reducible A t).
+    (forall (t u: term), reducible A t -> t ->β u -> reducible A u) /\
+    (forall (t: term), neutral t -> (forall (t': term), t ->β t' -> reducible A t') -> reducible A t).
 Proof.
   induction A as [ | A [IHA1 [IHA2 IHA3]] B [IHB1 [IHB2 IHB3]] ].
   - do 3 split.
@@ -106,7 +106,7 @@ Proof.
     + intros t ? IHred ? u Hred.
       apply IHB2 with (App t u).
       * apply IHred, Hred.
-      * now apply Step_app1.
+      * now apply Beta_AppL.
 
     + intros ? ? Hredt ? Hredu.
       apply IHA1 in Hredu as HSNu.
@@ -120,21 +120,21 @@ Proof.
         now apply IHA2 with u.
 Qed.
 
-Lemma SN_subst (t: term) (sigma: var -> term):
-  SN t -> forall (u: term), t = u.[sigma] -> SN u.
+Lemma SN_subst (t: term) (σ: var -> term):
+  SN t -> forall (u: term), t = u.[σ] -> SN u.
 Proof.
   induction 1 as [? _ IHt]; intros; subst.
 
   apply Strong.
   intros t ?.
 
-  apply IHt with t.[sigma].
-  - now apply step_subst.
+  apply IHt with t.[σ].
+  - now apply beta_subst.
   - reflexivity.
 Qed.
 
 Lemma SN_ind_pair (P : term -> term -> Prop):
-  (forall t u, (forall t' u', ((t = t' /\ step u u') \/ (step t t' /\ u = u')) -> P t' u') -> P t u)
+  (forall t u, (forall t' u', ((t = t' /\ u ->β u') \/ (t ->β t' /\ u = u')) -> P t' u') -> P t u)
     -> forall t u, SN t -> SN u -> P t u.
 Proof.
   intros IH ? ? Hsnt.
@@ -172,9 +172,9 @@ Proof.
 
   intros x y IH Hred Hredy.
   apply HB3; [ exact I |].
-  intros t Hstep.
+  intros t Hbeta.
 
-  inversion Hstep; subst.
+  inversion Hbeta; subst.
   - now apply Hred.
 
   - inversion H2; subst.
@@ -184,7 +184,7 @@ Proof.
     intros.
     apply HB2 with x.[u0/].
     + now apply Hred.
-    + now apply step_subst.
+    + now apply beta_subst.
 
   - apply IH.
     + now left.
@@ -193,8 +193,8 @@ Proof.
 Qed.
 
 
-Lemma reducible_var (A: type) (x: var) (gamma: var -> type):
-  types gamma (Var x) A -> reducible A (Var x).
+Lemma reducible_var (A: type) (x: var) (Γ: var -> type):
+  Γ ⊢ Var x : A -> reducible A (Var x).
 Proof.
   intros.
   destruct A.
@@ -205,36 +205,36 @@ Proof.
     inversion 1.
 Qed.
 
-Lemma typing_is_reducible (gamma: var -> type) (sigma: var -> term):
-  (forall (x: var), reducible (gamma x) (sigma x)) ->
-    forall (A: type) (t: term), types gamma t A -> reducible A t.[sigma].
+Lemma typing_is_reducible (Γ: var -> type) (σ: var -> term):
+  (forall (x: var), reducible (Γ x) (σ x)) ->
+    forall (A: type) (t: term), Γ ⊢ t : A -> reducible A t.[σ].
 Proof.
   intros Hred A t.
   revert Hred.
-  revert sigma A gamma.
+  revert σ A Γ.
 
-  induction t; intros sigma A gamma Hred.
+  induction t; intros σ A Γ Hred.
   all: inversion 1; subst; simpl.
 
   - apply Hred.
-  - apply IHt1 with (sigma := sigma) in H2; [| assumption ].
-    apply IHt2 with (sigma := sigma) in H4; [| assumption ].
+  - apply IHt1 with (σ := σ) in H2; [| assumption ].
+    apply IHt2 with (σ := σ) in H4; [| assumption ].
     now apply H2.
   - apply reducible_abs.
     intros u Hredu. asimpl.
-    apply IHt with (A0 .: gamma); [| assumption ].
+    apply IHt with (A0 .: Γ); [| assumption ].
     intros [| x ]; simpl; [ assumption |].
     apply Hred.
 Qed.
 
-Corollary STLC_is_SN (A: type) (gamma: var -> type) (t: term):
-  types gamma t A -> SN t.
+Corollary STLC_is_SN (A: type) (Γ: var -> type) (t: term):
+  Γ ⊢ t : A -> SN t.
 Proof.
   intros.
   apply (reducible_is_SN A).
   replace t with t.[ids] by apply subst_id.
-  apply typing_is_reducible with gamma; [| assumption ].
+  apply typing_is_reducible with Γ; [| assumption ].
   intros.
-  apply reducible_var with gamma.
-  now apply Types_var.
+  apply reducible_var with Γ.
+  now apply Typing_Var.
 Qed.
