@@ -3,7 +3,7 @@ From FormArith.SimplyTypedLambdaCalculus Require Import Definitions.
 
 Inductive SN: term -> Prop :=
   | Strong (t: term) :
-      (forall (t': term), t ->β t' -> SN t') -> SN t.
+      (forall (t': term), t ~> t' -> SN t') -> SN t.
 
 Fixpoint reducible (A: type) (t: term): Prop :=
   match A with
@@ -68,15 +68,15 @@ Proof.
 Qed.
 
 Lemma SN_inverted (t: term):
-  SN t -> forall (t': term), t ->β t' -> SN t'.
+  SN t -> forall (t': term), t ~> t' -> SN t'.
 Proof.
   now inversion 1.
 Qed.
 
 Lemma reducible_is_SN (A : type):
   (forall (t: term), reducible A t -> SN t) /\
-    (forall (t u: term), reducible A t -> t ->β u -> reducible A u) /\
-    (forall (t: term), neutral t -> (forall (t': term), t ->β t' -> reducible A t') -> reducible A t).
+    (forall (t u: term), reducible A t -> t ~> u -> reducible A u) /\
+    (forall (t: term), neutral t -> (forall (t': term), t ~> t' -> reducible A t') -> reducible A t).
 Proof.
   induction A as [ | A [IHA1 [IHA2 IHA3]] B [IHB1 [IHB2 IHB3]] ].
   - do 3 split.
@@ -134,7 +134,7 @@ Proof.
 Qed.
 
 Lemma SN_ind_pair (P : term -> term -> Prop):
-  (forall t u, (forall t' u', ((t = t' /\ u ->β u') \/ (t ->β t' /\ u = u')) -> P t' u') -> P t u)
+  (forall t u, (forall t' u', ((t = t' /\ u ~> u') \/ (t ~> t' /\ u = u')) -> P t' u') -> P t u)
     -> forall t u, SN t -> SN u -> P t u.
 Proof.
   intros IH ? ? Hsnt.
