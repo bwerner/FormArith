@@ -13,18 +13,18 @@ Instance Subst_term: Subst term. derive. Defined.
 Instance SubstLemmas_term: SubstLemmas term. derive. Defined.
 
 
-Reserved Notation "t ->β t'" (at level 60).
+Reserved Notation "t ~> t'" (at level 60).
 
 Inductive beta: term -> term -> Prop :=
-  | Beta_subst (s s' t: term): s' = s.[t .: ids] -> (App (Lam s) t) ->β s'
-  | Beta_AppL (s s' t: term): s ->β s' -> App s t ->β App s' t
-  | Beta_AppR (s t t': term): t ->β t' -> App s t ->β App s t'
-  | Beta_Lam (s s': term): s ->β s' -> Lam s ->β Lam s'
-  where "t ->β t'" := (beta t t').
+  | Beta_Subst (s s' t: term): s' = s.[t .: ids] -> (App (Lam s) t) ~> s'
+  | Beta_AppL (s s' t: term): s ~> s' -> App s t ~> App s' t
+  | Beta_AppR (s t t': term): t ~> t' -> App s t ~> App s t'
+  | Beta_Lam (s s': term): s ~> s' -> Lam s ~> Lam s'
+  where "t ~> t'" := (beta t t').
 
 
 Lemma beta_subst (t t': term) (σ: var -> term):
-  t ->β t' -> t.[σ] ->β t'.[σ].
+  t ~> t' -> t.[σ] ~> t'.[σ].
 Proof.
   revert t' σ.
 
@@ -32,7 +32,7 @@ Proof.
   - inversion 1.
 
   - inversion 1; subst; simpl.
-    + apply Beta_subst.
+    + apply Beta_Subst.
       asimpl.
       reflexivity.
 
@@ -112,7 +112,7 @@ Proof.
 Qed.
 
 Lemma type_preservation (Γ: var -> type) (s t: term) (A: type):
-  Γ ⊢ s : A -> s ->β t -> Γ ⊢ t : A.
+  Γ ⊢ s : A -> s ~> t -> Γ ⊢ t : A.
 Proof.
   revert Γ t A.
 
