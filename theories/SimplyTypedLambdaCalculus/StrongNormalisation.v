@@ -9,18 +9,23 @@ Fixpoint reducible (A: type) (t: term): Prop :=
   match A with
   | Base => SN t
   | Arr A B => forall (u: term), reducible A u -> reducible B (App t u)
+  | Prod A B => reducible A (Pr1 t) /\ reducible B (Pr2 t)
   end.
 
 Definition neutral (t: term): Prop :=
   match t with
-  | Lam _ => False
+  | Lam _ | Pair _ _ => False
   | _ => True
   end.
 
 Inductive sub_term: term -> term -> Prop :=
   | Sub_app1 (t1 t2: term) : sub_term t1 (App t1 t2)
   | Sub_app2 (t1 t2: term) : sub_term t2 (App t1 t2)
-  | Sub_lam (t: term) : sub_term t (Lam t).
+  | Sub_lam (t: term) : sub_term t (Lam t)
+  | Sub_pair1 (t1 t2: term): sub_term t1 (Pair t1 t2)
+  | Sub_pair2 (t1 t2: term): sub_term t2 (Pair t1 t2)
+  | Sub_pr1 (t: term): sub_term t (Pr1 t)
+  | Sub_pr2 (t: term): sub_term t (Pr2 t).
 
 
 Lemma SN_lam (t: term):
@@ -57,6 +62,22 @@ Proof.
   - apply IH with (Lam u).
     + now apply Beta_Lam.
     + apply Sub_lam.
+
+  - apply IH with (Pair u t2).
+    + now apply Beta_Pair1.
+    + apply Sub_pair1.
+
+  - apply IH with (Pair t1 u).
+    + now apply Beta_Pair2.
+    + apply Sub_pair2.
+
+  - apply IH with (Pr1 u).
+    + now apply Beta_Pr1.
+    + apply Sub_pr1.
+
+  - apply IH with (Pr2 u).
+    + now apply Beta_Pr2.
+    + apply Sub_pr2.
 Qed.
 
 Lemma SN_var_app (t: term) (n: var):
@@ -78,7 +99,9 @@ Lemma reducible_is_SN (A : type):
     (forall (t u: term), reducible A t -> t ~> u -> reducible A u) /\
     (forall (t: term), neutral t -> (forall (t': term), t ~> t' -> reducible A t') -> reducible A t).
 Proof.
-  induction A as [ | A [IHA1 [IHA2 IHA3]] B [IHB1 [IHB2 IHB3]] ].
+  induction A as [
+    | A [IHA1 [IHA2 IHA3]] B [IHB1 [IHB2 IHB3]]
+    | A [IHA1 [IHA2 IHA3]] B [IHB1 [IHB2 IHB3]] ].
   - do 3 split.
     + intros.
       apply SN_inverted with t'; [| assumption ].
@@ -118,6 +141,22 @@ Proof.
       * now apply Hredt.
       * apply IHu; [ assumption |].
         now apply IHA2 with u.
+
+  - split; [| split ]; simpl.
+    + intros t [Hred _].
+      apply IHA1 in Hred. apply SN_sub_term with (t' := t) in Hred.
+      * assumption.
+      * apply Sub_pr1.
+
+    + intros t u [Hred1 Hred2] Hstep. split.
+      * apply (IHA2 (Pr1 t) _ Hred1). now apply Beta_Pr1.
+      * apply (IHB2 (Pr2 t) _ Hred2). now apply Beta_Pr2.
+
+    + intros t Hneu H. split.
+      * apply IHA3; [ exact I | ]. intros t' Hstep. inv Hstep; [| destruct Hneu ].
+        apply (H s' H1).
+      * apply IHB3; [ exact I | ]. intros t' Hstep. inv Hstep; [| destruct Hneu ].
+        apply (H s' H1).
 Qed.
 
 Lemma SN_subst (t: term) (σ: var -> term):
@@ -196,13 +235,50 @@ Qed.
 Lemma reducible_var (A: type) (x: var) (Γ: var -> type):
   Γ ⊢ Var x : A -> reducible A (Var x).
 Proof.
-  intros.
-  destruct A.
-  - simpl.
-    apply Strong.
-    inversion 1.
-  - apply reducible_is_SN; [ exact I |].
-    inversion 1.
+  intros. specialize (reducible_is_SN A) as (_ & _ & HA3).
+  apply HA3.
+  - exact I.
+  - inversion 1.
+Qed.
+
+Lemma reducible_pair (A B: type) (u v: term):
+  reducible A u ->
+  reducible B v ->
+  reducible (Prod A B) (Pair u v).
+Proof.
+  intros Hredu Hredv. simpl.
+  specialize (reducible_is_SN A) as (HA1 & HA2 & HA3).
+  specialize (reducible_is_SN B) as (HB1 & HB2 & HB3).
+  assert (HSNu: SN u) by now apply HA1.
+  assert (HSNv: SN v) by now apply HB1.
+  revert Hredu Hredv.
+  apply SN_ind_pair with (t := u) (u := v); [| assumption | assumption ].
+  intros u' v' IH.
+  intros Hredu' Hredv'. split.
+  - apply HA3; [exact I |].
+    intros t' Hred. inv Hred.
+    + inv H0.
+      * apply IH.
+        -- now right.
+        -- now apply HA2 with u'.
+        -- assumption.
+      * apply IH.
+        -- now left.
+        -- assumption.
+        -- now apply HB2 with v'.
+    + assumption.
+  - apply HB3; [exact I |].
+    intros t' Hred. inv Hred.
+    + inv H0.
+      * apply IH.
+        -- now right.
+        -- now apply HA2 with u'.
+        -- assumption.
+      * apply IH.
+        -- now left.
+        -- assumption.
+        -- now apply HB2 with v'.
+    + assumption.
 Qed.
 
 Lemma typing_is_reducible (Γ: var -> type) (σ: var -> term):
@@ -225,6 +301,13 @@ Proof.
     apply IHt with (A0 .: Γ); [| assumption ].
     intros [| x ]; simpl; [ assumption |].
     apply Hred.
+
+  - apply reducible_pair.
+    + now eapply IHt1.
+    + now eapply IHt2.
+
+  - apply (IHt σ (Prod A B) Γ Hred H1).
+  - apply (IHt σ (Prod A0 A) Γ Hred H1).
 Qed.
 
 Corollary STLC_is_SN (A: type) (Γ: var -> type) (t: term):
