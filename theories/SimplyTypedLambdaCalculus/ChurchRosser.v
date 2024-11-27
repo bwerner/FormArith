@@ -21,6 +21,28 @@ Inductive par_red: term -> term -> Prop :=
   | ParRed_Lam (t t': term) :
     t >=> t' ->
     Lam t >=> Lam t'
+
+  | ParRed_Pair (s s' t t': term):
+    s >=> s' ->
+    t >=> t' ->
+    Pair s t >=> Pair s' t'
+
+  | ParRed_Pr1 (s s': term):
+    s >=> s' ->
+    Pr1 s >=> Pr1 s'
+
+  | ParRed_Pr2 (s s': term):
+    s >=> s' ->
+    Pr2 s >=> Pr2 s'
+
+  | ParRed_Pr1_Pair (s s' t: term):
+    s >=> s' ->
+    Pr1 (Pair s t) >=> s'
+
+  | ParRed_Pr2_Pair (s t t': term):
+    t >=> t' ->
+    Pr2 (Pair s t) >=> t'
+
   where "t >=> t'" := (par_red t t').
 
 Notation "R *" := (clos_refl_trans _ R)
@@ -43,6 +65,11 @@ Fixpoint par_red_max_reduction (t: term): term :=
   | App (Lam t) u => (par_red_max_reduction t).[(par_red_max_reduction u)/]
   | App t u => App (par_red_max_reduction t) (par_red_max_reduction u)
   | Lam t => Lam (par_red_max_reduction t)
+  | Pair s t => Pair (par_red_max_reduction s) (par_red_max_reduction t)
+  | Pr1 (Pair s t) => par_red_max_reduction s
+  | Pr2 (Pair s t) => par_red_max_reduction t
+  | Pr1 s => Pr1 (par_red_max_reduction s)
+  | Pr2 s => Pr2 (par_red_max_reduction s)
   end.
 
 Definition replace_lambda (f: term -> term) (s u: term): term :=
@@ -51,6 +78,11 @@ Definition replace_lambda (f: term -> term) (s u: term): term :=
   | _ => u
   end.
 
+Definition replace_pair (f: term -> term -> term) (s u: term): term :=
+  match s with
+  | Pair s t => f s t
+  | _ => u
+  end.
 
 Lemma par_red_refl (t: term):
   t >=> t.
@@ -58,8 +90,10 @@ Proof.
   induction t.
   - apply ParRed_Var.
   - apply ParRed_App; assumption.
-  - apply ParRed_Lam.
-    assumption.
+  - apply ParRed_Lam. assumption.
+  - apply ParRed_Pair; assumption.
+  - apply ParRed_Pr1; assumption.
+  - apply ParRed_Pr2; assumption.
 Qed.
 
 Lemma beta_star_refl (t: term):
@@ -110,6 +144,12 @@ Proof.
   - apply ParRed_App; [ apply par_red_refl | assumption ].
   - apply ParRed_Lam.
     assumption.
+  - apply ParRed_Pair; [ assumption | apply par_red_refl ].
+  - apply ParRed_Pair; [ apply par_red_refl | assumption ].
+  - apply ParRed_Pr1. assumption.
+  - apply ParRed_Pr2. assumption.
+  - apply ParRed_Pr1_Pair. apply par_red_refl.
+  - apply ParRed_Pr2_Pair. apply par_red_refl.
 Qed.
 
 Lemma par_red_subst (t t': term) (sigma: var -> term):
@@ -123,6 +163,11 @@ Proof.
     | v
     | s s' t t' par_red_s_s' IHs par_red_t_t' IHt
     | s s' par_red_s_s' IHs
+    | s s' t t' _ IHs _ IHt
+    | s s' _ IHs
+    | s s' _ IHs
+    | s s' t _ IHs
+    | s t t' _ IHt
   ]; intros sigma.
   - asimpl.
     pose proof (ParRed_Subst s.[up sigma] s'.[up sigma] t.[sigma] t'.[sigma]) as H.
@@ -133,6 +178,11 @@ Proof.
   - apply ParRed_Lam.
     asimpl.
     apply IHs.
+  - apply ParRed_Pair; [apply IHs | apply IHt].
+  - apply ParRed_Pr1. apply IHs.
+  - apply ParRed_Pr2. apply IHs.
+  - apply ParRed_Pr1_Pair. apply IHs.
+  - apply ParRed_Pr2_Pair. apply IHt.
 Qed.
 
 Lemma par_red_subst_up_equivalence (sigma sigma': var -> term):
@@ -158,6 +208,11 @@ Proof.
     | v
     | s s' t t' _ IHs _ IHt
     | s s' _ IHs
+    | s s' t t' _ IHs _ IHt
+    | s s' _ IHs
+    | s s' _ IHs
+    | s s' t _ IHs
+    | s t t' _ IHt
   ]; intros sigma sigma' Hv.
   - asimpl.
     pose proof (ParRed_Subst s.[up sigma] s'.[up sigma'] t.[sigma] t'.[sigma']) as H.
@@ -181,6 +236,11 @@ Proof.
     apply IHs.
     apply par_red_subst_up_equivalence.
     assumption.
+  - apply ParRed_Pair; [ apply (IHs _ _ Hv) | apply (IHt _ _ Hv) ].
+  - apply ParRed_Pr1. apply (IHs _ _ Hv).
+  - apply ParRed_Pr2. apply (IHs _ _ Hv).
+  - apply ParRed_Pr1_Pair. apply (IHs _ _ Hv).
+  - apply ParRed_Pr2_Pair. apply (IHt _ _ Hv).
 Qed.
 
 Lemma beta_star_app_r (s s' t: term):
@@ -240,17 +300,77 @@ Proof.
   intros beta_star_s_s'.
   induction beta_star_s_s' as [ s s' H | x | x y z IHxy IHAppxy IHyz IHAppyz ].
   - induction H; apply rt_step, Beta_Lam.
-    + apply Beta_Subst.
-      assumption.
-    + apply Beta_AppL.
-      assumption.
-    + apply Beta_AppR.
-      assumption.
-    + apply Beta_Lam.
-      assumption.
+    + now apply Beta_Subst.
+    + now apply Beta_AppL.
+    + now apply Beta_AppR.
+    + now apply Beta_Lam.
+    + now apply Beta_Pair1.
+    + now apply Beta_Pair2.
+    + now apply Beta_Pr1.
+    + now apply Beta_Pr2.
+    + now apply Beta_Pr1_Pair.
+    + now apply Beta_Pr2_Pair.
   - apply rt_refl.
   - apply rt_trans with (y := Lam y); assumption.
-Qed. 
+Qed.
+
+Lemma beta_star_pr1 (s s': term):
+  s ~>* s' ->
+  Pr1 s ~>* Pr1 s'.
+Proof.
+  intros Hs. induction Hs.
+  - apply rt_step. now apply Beta_Pr1.
+  - apply rt_refl.
+  - eapply rt_trans; eassumption.
+Qed.
+
+Lemma beta_star_pr2 (s s': term):
+  s ~>* s' ->
+  Pr2 s ~>* Pr2 s'.
+Proof.
+  intros Hs. induction Hs.
+  - apply rt_step. now apply Beta_Pr2.
+  - apply rt_refl.
+  - eapply rt_trans; eassumption.
+Qed.
+
+Lemma beta_star_pair1 (s s' t: term):
+  s ~>* s' ->
+  Pair s t ~>* Pair s' t.
+Proof.
+  intros Hs. induction Hs.
+  - apply rt_step. now apply Beta_Pair1.
+  - apply rt_refl.
+  - eapply rt_trans; eassumption.
+Qed.
+
+Lemma beta_star_pair2 (s t t': term):
+  t ~>* t' ->
+  Pair s t ~>* Pair s t'.
+Proof.
+  intros Ht. induction Ht.
+  - apply rt_step. now apply Beta_Pair2.
+  - apply rt_refl.
+  - eapply rt_trans; eassumption.
+Qed.
+
+Lemma beta_star_pair (s s' t t': term):
+  s ~>* s' ->
+  t ~>* t' ->
+  Pair s t ~>* Pair s' t'.
+Proof.
+  intros Hs. revert t t'.
+  induction Hs; intros t t' Ht.
+  - apply rt_trans with (Pair y t).
+    + apply rt_step. now apply Beta_Pair1.
+    + now apply beta_star_pair2.
+  - now apply beta_star_pair2.
+  - apply rt_trans with (y := Pair y t).
+    + now apply beta_star_pair1.
+    + apply rt_trans with (y := Pair z t).
+      * now apply beta_star_pair1.
+      * now apply beta_star_pair2.
+Qed.
 
 Lemma par_red_to_beta_star (s t : term):
   s >=> t -> s ~>* t.
@@ -261,6 +381,11 @@ Proof.
     | v
     | s s' t t' _ beta_star_s_s' _ beta_star_t_t'
     | s s' _ beta_star_s_s'
+    | s s' t t' _ IHs _ IHt
+    | s s' _ IHs
+    | s s' _ IHs
+    | s s' t _ IHs
+    | s t t' _ IHt
   ].
   - apply rt_trans with (y := App (Lam s') t).
     + apply beta_star_app.
@@ -276,6 +401,13 @@ Proof.
   - apply beta_star_app; assumption.
   - apply beta_star_lam.
     assumption.
+  - apply beta_star_pair; assumption.
+  - apply beta_star_pr1. assumption.
+  - apply beta_star_pr2. assumption.
+  - apply rt_trans with (y := s); [| assumption ].
+    apply rt_step. apply Beta_Pr1_Pair.
+  - apply rt_trans with (y := t); [| assumption ].
+    apply rt_step. apply Beta_Pr2_Pair.
 Qed.
 
 Lemma beta_star_equiv_par_red_star (s t: term):
@@ -302,7 +434,7 @@ Lemma lam_match : forall (s u : term) (f : term -> term),
   ((replace_lambda f s u) = u /\ ~exists s', s = Lam s').
 Proof.
   intros s u f.
-  destruct s as [ n | s1 s2 | s ].
+  destruct s as [ n | s1 s2 | s | s1 s2 | s | s ].
   - right.
     split.
     + simpl.
@@ -319,6 +451,23 @@ Proof.
     left.
     exists s.
     split; reflexivity.
+  - simpl. right. split; [ reflexivity| ].
+    intros [t eq_t]. discriminate.
+  - right. split; [ reflexivity | ].
+    intros [t eq_t]. discriminate.
+  - right. split; [ reflexivity | ].
+    intros [t eq_t]. discriminate.
+Qed.
+
+Lemma pair_match : forall (s u: term) (f : term -> term -> term),
+    (exists s' t', s = Pair s' t' /\ replace_pair f s u = f s' t') \/
+    (replace_pair f s u = u /\ ~ exists s' t', s = Pair s' t').
+Proof.
+  intros [n | s1 s2 | s | s1 s2 | s | s] u f.
+  1, 2, 3, 5, 6:
+    simpl; right; split; try reflexivity;
+    intros [s' [t' eq]]; discriminate.
+  left. simpl. exists s1, s2. split; reflexivity.
 Qed.
 
 Lemma max_par_red (t t': term):
@@ -330,6 +479,11 @@ Proof.
     | v
     | s s' t t' par_red_s_s' IHs _ IHt
     | s s' _ IHs
+    | s s' t t' _ IHs _ IHt
+    | s s' par_red_s_s' IHs
+    | s s' par_red_s_s' IHs
+    | s s' t par_red_s_s' IHs
+    | s t t' _ IHt
   ]; asimpl.
   - apply par_red_subst_par_red.
     + intros v.
@@ -341,11 +495,12 @@ Proof.
     + assumption.
   - apply par_red_refl.
   - set (f := fun s' => (par_red_max_reduction s').[par_red_max_reduction t/]).
-    destruct (lam_match s (App (par_red_max_reduction s) (par_red_max_reduction t)) f) as [ [ u [ H1 H2 ] ] | [ H1 H2 ] ]; subst.
+    destruct (lam_match s (App (par_red_max_reduction s) (par_red_max_reduction t)) f) as
+      [ [ u [ H1 H2 ] ] | [ H1 H2 ] ]; subst.
     + inversion par_red_s_s'; subst.
       inversion IHs; subst.
       apply ParRed_Subst; assumption.
-    + destruct s as [ n | s1 s2 | s ]; simpl in IHs.
+    + destruct s as [ n | s1 s2 | s | s1 s2 | s | s]; simpl in IHs.
       * simpl.
         apply ParRed_App; assumption.
       * apply ParRed_App; assumption.
@@ -353,8 +508,28 @@ Proof.
         apply H2.
         exists s.
         reflexivity.
+      * simpl. apply ParRed_App; assumption.
+      * simpl. apply ParRed_App; assumption.
+      * apply ParRed_App; assumption.
   - apply ParRed_Lam.
     assumption.
+  - apply ParRed_Pair; assumption.
+  - set (f := fun (s t : term) => par_red_max_reduction s).
+    destruct (pair_match s (Pr1 (par_red_max_reduction s)) f) as [[u [v [H1 H2]]] | [H1 H2]]; subst.
+    + simpl in IHs. inversion par_red_s_s'; subst.
+      inversion IHs; subst. apply ParRed_Pr1_Pair. assumption.
+    + destruct s as [n | s1 s2 | s | s1 s2 | s | s]; simpl in IHs.
+      4: exfalso; apply H2; exists s1, s2; reflexivity.
+      all: apply ParRed_Pr1; assumption.
+  - set (f := fun (s t : term) => par_red_max_reduction s).
+    destruct (pair_match s (Pr2 (par_red_max_reduction s)) f) as [[u [v [H1 H2]]] | [H1 H2]]; subst.
+    + simpl in IHs. inversion par_red_s_s'; subst.
+      inversion IHs; subst. apply ParRed_Pr2_Pair. assumption.
+    + destruct s as [n | s1 s2 | s | s1 s2 | s | s]; simpl in IHs.
+      4: exfalso; apply H2; exists s1, s2; reflexivity.
+      all: apply ParRed_Pr2; assumption.
+  - assumption.
+  - assumption.
 Qed.
 
 Lemma local_confluence_par_red: local_confluence par_red.
