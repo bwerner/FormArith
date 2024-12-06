@@ -28,6 +28,7 @@ Inductive beta: term -> term -> Prop :=
   | Beta_RS (t0 tn n : term): Rec t0 tn (Const_S n) ~> (App (App tn n) (Rec t0 tn n))
   | Beta_RI0 (t0 t0' tn n : term): t0 ~> t0' -> Rec t0 tn n ~> Rec t0' tn n
   | Beta_RIS (t0 tn tn' n : term): tn ~> tn' -> Rec t0 tn n ~> Rec t0 tn' n
+  | Beta_RIN (t0 tn n n': term): n ~> n' -> Rec t0 tn n ~> Rec t0 tn n'
   where "t ~> t'" := (beta t t').
 
 
@@ -36,7 +37,7 @@ Lemma beta_subst (t t': term) (σ: var -> term):
 Proof.
   revert t' σ.
 
-  induction t as [ | ? IHs ? IHt | s IHs | | | ? IH1 ? IH2 ? ?].
+  induction t as [ | ? IHs ? IHt | s IHs | | | ? IH1 ? IH2 ? IH3].
   - inversion 1.
 
   - inversion 1; subst; simpl.
@@ -71,6 +72,7 @@ Proof.
     + apply Beta_RS.
     + apply Beta_RI0. apply IH1. assumption.
     + apply Beta_RIS. apply IH2. assumption.
+    + apply Beta_RIN. apply IH3. assumption.
     
 Qed.
 
@@ -189,10 +191,12 @@ Proof.
 
   - clear IHs3. inversion H5; subst.
     apply Typing_App with (A := A).
-    + apply Typing_App with (A := Nat). all: assumption.
-    + apply Typing_R. all: assumption.
+    + apply Typing_App with (A := Nat); assumption.
+    + apply Typing_R; assumption.
   - apply Typing_R; [ | assumption .. ].
-    apply IHs1. all: assumption.
+    apply IHs1; assumption.
   - apply Typing_R; [assumption | | assumption].
-    apply IHs2. all: assumption.
+    apply IHs2; assumption.
+  - apply Typing_R; [ assumption | assumption |].
+    apply IHs3; assumption.
 Qed.

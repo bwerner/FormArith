@@ -23,7 +23,8 @@ Inductive sub_term: term -> term -> Prop :=
   | Sub_lam (t: term) : sub_term t (Lam t)
   | Sub_S (s : term) : sub_term s (Const_S s)
   | Sub_R0 (t0 ts n: term) : sub_term t0 (Rec t0 ts n)
-  | Sub_RS (t0 ts n: term) : sub_term ts (Rec t0 ts n).
+  | Sub_RS (t0 ts n: term) : sub_term ts (Rec t0 ts n)
+  | Sub_RN (t0 ts n: term) : sub_term n (Rec t0 ts n).
 
 Lemma SN_lam (t: term):
   SN t -> SN (Lam t).
@@ -84,11 +85,15 @@ Proof.
     + now apply Beta_RI0.
     + apply Sub_R0.
 
-  (* case: Sub_R0 *)
+  (* case: Sub_RS *)
   - apply IH with (Rec t0 u n).
     + now apply Beta_RIS.
     + apply Sub_RS.
 
+  (* case: Sub_RN *)
+  - apply IH with (Rec t0 ts u).
+    + now apply Beta_RIN.
+    + apply Sub_RN.
 Qed.
 
 Lemma SN_var_app (t: term) (n: var):
@@ -216,6 +221,22 @@ Proof.
     now apply Strong.
 Qed.
 
+Lemma SN_double_ind (P : term -> term -> Prop):
+    (forall s t,
+      (forall s', s ~> s' -> P s' t)
+      -> (forall t', t ~> t' -> P s t') -> P s t)
+    -> forall s t, SN s -> SN t -> P s t.
+Proof.
+  intros IH s t Hs.
+  revert t. induction Hs as [s Hs1 Hs2].
+  apply Strong in Hs1.
+  intros t Ht. induction Ht as [t Ht1 Ht2].
+  apply Strong in Ht1.
+  apply IH.
+  - intros. apply Hs2. all: assumption.
+  - intros. apply Ht2. all: assumption.
+Qed.
+
 Lemma SN_triple_ind (P : term -> term -> term -> Prop):
     (forall s t u,
       (forall s', s ~> s' -> P s' t u)
@@ -237,6 +258,12 @@ Proof.
   - intros. apply Hu2. all: assumption.
 Qed.
 
+(*
+Inductive SN: term -> Prop :=
+  | Strong (t: term) :
+      (forall (t': term), t ~> t' -> SN t') -> SN t.
+*)
+
 Lemma reducible_Rec (t0 ts n : term) (A: type):
   reducible A t0 
   -> reducible (Arr Nat (Arr A A)) ts
@@ -252,16 +279,20 @@ apply SN_triple_ind with (s := t0) (t := ts) (u := n); [ | assumption .. ].
 clear Hsnt0 Hsnts Hsnn.
 clear t0 ts n.
 intros t0 ts n Ht0' Hts' Hn' Hn Hts Ht0.
+
 apply reducible_CR3; [now simpl |].
+fix aaa 1.
 inversion 1; subst.
   - assumption.
   - simpl in Hts. apply Hts.
     ** apply SN_sub_term with (t := Const_S n0); [apply Hn | constructor].
     ** admit.
-  - apply Ht0'. all: try assumption.
-    apply reducible_CR2 with (t := t0). all: assumption.
+  - apply Ht0'; try assumption.
+    apply reducible_CR2 with (t := t0); assumption.
   - apply Hts'. all: try assumption.
-    apply reducible_CR2 with (t := ts). all: assumption.
+    apply reducible_CR2 with (t := ts); assumption.
+  - apply Hn'; try assumption.
+    apply reducible_CR2 with (t := n); assumption.
 Admitted.
 
 Lemma reducible_abs (v: term) (A B: type):
@@ -317,6 +348,7 @@ Proof.
     inversion 1.
 Qed.
 
+(*
 Lemma size_recursion (X : Type) (sigma : X -> nat) (p : X -> Type) :
   (forall x, (forall y, sigma y < sigma x -> p y) -> p x) ->
   forall x, p x.
@@ -328,7 +360,7 @@ Proof.
   - exfalso. inversion E.
   - apply D. intros x F. apply IHn. lia.
 Defined.
-
+*)
 
 Lemma typing_is_reducible (Γ: var -> type) (σ: var -> term):
   (forall (x: var), reducible (Γ x) (σ x)) ->
