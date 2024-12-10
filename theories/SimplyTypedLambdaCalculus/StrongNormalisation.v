@@ -369,6 +369,38 @@ Proof.
   cbn in Hlen. firstorder.
 Qed.
 
+Fixpoint update_nth {A : Type} n (l : list A) (a : A) :=
+  match l with 
+  | nil => nil
+  | cons x l' => match n with 
+                 | 0 => cons a l'
+                 | S n' => cons x (update_nth n' l' a)
+                 end
+  end.
+
+Lemma update_decr ind n l : ind < length l -> n = List.nth ind l 0 -> n > 0 -> List.list_sum (update_nth ind l (pred n)) < List.list_sum l.
+Proof.
+  intros Hlen Hind Hgt0.
+  induction l as [| x l IH] in ind, Hlen, Hind, Hgt0 |- *.
+  - cbn in Hlen. lia.
+  - cbn in Hlen.
+    destruct ind as [| ind].
+    + cbn in *; subst.
+      lia.
+    + cbn in *. specialize (IH ind).
+      apply PeanoNat.lt_S_n in Hlen.
+      firstorder. unfold List.list_sum in H. lia.
+Qed.
+
+Lemma update_length {A : Type} (l: list A) n v : length (update_nth n l v) = length l.
+Proof.
+  induction l as [| x l IH] in n |- *.
+  - destruct n; reflexivity.
+  - destruct n.
+    + cbn. reflexivity.
+    + cbn. congruence.
+Qed.
+
 Lemma max_steps_list_decr t1 t2 l l' outer :
   t1 ~> t2 -> 
   length l' = length (outer ++ t1 :: l) -> 
@@ -382,7 +414,7 @@ Lemma max_steps_list_decr t1 t2 l l' outer :
          end -> length l <= n) (List.combine (outer ++ t1 :: l) l') -> 
   exists l'',
   List.list_sum l'' < List.list_sum l'
-  /\ length l'' = length (outer ++ t1 :: l)
+  /\ length l'' = length (outer ++ t2 :: l)
   /\ List.Forall
   (fun p : prod term nat =>
    let (t0, n) := p in
@@ -390,32 +422,72 @@ Lemma max_steps_list_decr t1 t2 l l' outer :
    match l0 with
    | []%list => True
    | (t2 :: _)%list => t0 ~> t2 /\ reduction_sequence l0
-   end -> length l0 <= n) (List.combine (outer ++ t1 :: l) l'').
+   end -> length l0 <= n) (List.combine (outer ++ t2 :: l) l'').
 Proof.
   intros Hstep Hlen Hl'.
-  assert (List.In t1 (outer ++ t1 :: l)) as Hin.
-  - auto with datatypes.
-  - apply List.In_nth with (d := Var 0) in Hin as (ind & Hind & Hin).
-    rewrite (List.Forall_forall) in Hl'.
-    pose (List.nth ind l' 0) as n.
-    assert (List.In (t1, n) (List.combine (outer ++ t1 :: l) l')) as H.
-    { assert ((t1, n) = List.nth ind (List.combine (outer ++ t1 :: l) l') (Var 0, 0)) as Hnth.
-      - rewrite <- Hin.
-        rewrite List.combine_nth.
-        + repeat f_equal.
-          congruence.
-        + rewrite Hlen. congruence.
-      - rewrite Hnth. apply List.nth_In.
-        rewrite List.combine_length.
-        lia.
-    }
-    apply Hl' in H.
-    pose proof (max_steps_decr t1 n H t2 Hstep) as Hdecr.
-    pose proof (max_steps_nonzero t1 t2 n Hstep H) as Hnz.
-    
-    (*ideally, we would like to have some kind of list update function here with the desired properties. We don't.*)
-    (*induction on outer won't work: we don't get from List.nth ind (t1 :: l) _ = t1 that ind = 0. *)
-Admitted.
+  pose (length outer) as ind.
+  assert (ind < length (outer ++ t1 :: l)) as Hind.
+  {
+    clear.
+    induction outer; cbn in *; lia.
+  }
+  assert (List.nth ind (outer ++ t1 :: l) (Var 0) = t1) as Hin.
+  {
+    clear.
+    induction outer; cbn in *.
+    - reflexivity.
+    - assumption.
+  }
+  rewrite (List.Forall_forall) in Hl'.
+  pose (List.nth ind l' 0) as n.
+  assert (List.In (t1, n) (List.combine (outer ++ t1 :: l) l')) as H.
+  { assert ((t1, n) = List.nth ind (List.combine (outer ++ t1 :: l) l') (Var 0, 0)) as Hnth.
+    - rewrite <- Hin.
+      rewrite List.combine_nth.
+      + repeat f_equal.
+        congruence.
+      + rewrite Hlen. congruence.
+    - rewrite Hnth. apply List.nth_In.
+      rewrite List.combine_length.
+      lia.
+  }
+  apply Hl' in H.
+  pose proof (max_steps_decr t1 n H t2 Hstep) as Hdecr.
+  pose proof (max_steps_nonzero t1 t2 n Hstep H) as Hnz.
+
+  exists (update_nth ind l' (pred n)).
+  split. 1: {
+    apply update_decr.
+    - lia.
+    - reflexivity.
+    - assumption.
+  }
+  split. 1: {
+    rewrite update_length.
+    rewrite Hlen.
+    clear.
+    induction outer; cbn.
+    - reflexivity.
+    - congruence.
+  }
+  rewrite <- List.Forall_forall in Hl'.
+  clear - Hdecr Hl' Hlen.
+  unfold ind in *.
+
+  induction outer in l', Hl', n, Hlen, Hdecr |- *.
+  - cbn in *. destruct l'.
+    + constructor.
+    + constructor.
+      * exact Hdecr.
+      * inversion Hl'; subst. assumption.
+  - destruct l'; cbn in *.
+    + congruence.
+    + inversion Hl'.
+      constructor.
+      * assumption.
+      * apply IHouter; try assumption.
+        now inversion Hlen.
+Qed.
 
 (* Lemma 3.2.1 statement (3) for the base case, where the entire term is of some atomic type.
    Formalizing this proof is difficult:
@@ -530,17 +602,17 @@ Proof.
       rewrite (nested_app_app).
       destruct Hl' as [Hl'1 Hl'2].
       pose proof (max_steps_list_decr t1 t' l l' outer Hstep Hl'1 Hl'2) as (l'' & Hdecr & Hl'').
+      constructor.
       eapply IH.
-      2: exact Hsn.
-      2: exact Hsnu.
-      2, 3: eassumption.
-      3: reflexivity.
-      3: {
-        clear - Hstep.
-         induction outer; now constructor.
-      }
-      2: exact Hl''.
-      lia.
+      3: exact Hsnu.
+      3: exact Hnt.
+      3: exact Hnu.
+      4: reflexivity.
+      3: exact Hl''.
+      1: lia.
+      eapply SN_inverted. 1: exact Hsn.
+      clear - Hstep.
+      induction outer; now constructor.
   - destruct l; cbn in Heqtrm; congruence.
 Qed.
 
@@ -731,4 +803,4 @@ Proof.
   intros.
   apply reducible_var with Γ.
   now apply Typing_Var.
-Qed
+Qed.
