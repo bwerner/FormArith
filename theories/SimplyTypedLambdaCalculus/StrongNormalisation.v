@@ -1,4 +1,4 @@
-From FormArith.SimplyTypedLambdaCalculus Require Import Definitions.
+From FormArith.SimplyTypedLambdaCalculus Require Import Definitions ChurchRosser.
 Import List.ListNotations.
 
 
@@ -103,7 +103,7 @@ Fixpoint nested_app t l :=
   | cons t' l' => App (nested_app t l') t'
   end.
 
-Lemma atomic_step t s : atomic' t -> t ->β s -> atomic' s.
+Lemma atomic_step t s : atomic' t -> t ~> s -> atomic' s.
 Proof.
   induction t in s |- *; cbn.
   - inversion 2.
@@ -131,8 +131,8 @@ Proof.
     + apply H2. 1: assumption. assumption.
 Qed.
 
-Lemma SN_ind_pair (P : term -> term -> Prop):
-  (forall t u, (forall t' u', ((t = t' /\ u ->β u') \/ (t ->β t' /\ u = u')) -> P t' u') -> P t u)
+Lemma SNaa_ind_pair (P : term -> term -> Prop):
+  (forall t u, (forall t' u', ((t = t' /\ u ~> u') \/ (t ~> t' /\ u = u')) -> P t' u') -> P t u)
     -> forall t u, SN t -> SN u -> P t u.
 Proof.
   intros IH ? ? Hsnt.
@@ -169,7 +169,7 @@ Fixpoint enumerate_steps (t : term) : list term :=
 (*
   enumerate_steps is sound and complete:
  *)
-Lemma enumerate_steps_spec t: forall t', List.In t' (enumerate_steps t) <-> t ->β t'.
+Lemma enumerate_steps_spec t: forall t', List.In t' (enumerate_steps t) <-> t ~> t'.
 Proof.
   induction t as [x | s IHs t IHt | s IHs].
   - intros u; cbn. split.
@@ -206,7 +206,7 @@ Qed.
 (*
   This version is slightly nicer to use in the following proof:
 *)
-Lemma enumerate_Forall_beta t : List.Forall (fun t' => t ->β t') (enumerate_steps t).
+Lemma enumerate_Forall_beta t : List.Forall (fun t' => t ~> t') (enumerate_steps t).
 Proof.
   apply List.Forall_forall.
   apply enumerate_steps_spec.
@@ -220,7 +220,7 @@ Fixpoint reduction_sequence (l : list term) : Prop :=
   match l with 
   | nil => True
   | cons t nil => True
-  | cons s (cons t l' as ll) => s ->β t /\ reduction_sequence ll
+  | cons s (cons t l' as ll) => s ~> t /\ reduction_sequence ll
   end.
 
 Require Import Lia.
@@ -238,7 +238,7 @@ Proof.
   (*The proof is by induction on SN, which is also why we can't (easily) state this as a function.*)
   intros Hsn. induction Hsn as [t Hsn IH].
   (*First, we apply the induction hypothesis to all terms in `enumerate_steps` (i.e. all the terms t can reduce to).*)
-  assert (List.Forall (fun t' => t ->β t' /\ exists n, forall l, reduction_sequence (t' :: l) -> length l <= n) (enumerate_steps t)) as H.
+  assert (List.Forall (fun t' => t ~> t' /\ exists n, forall l, reduction_sequence (t' :: l) -> length l <= n) (enumerate_steps t)) as H.
   + pose proof (enumerate_Forall_beta t) as H.
     induction H.
     * constructor.
@@ -246,7 +246,7 @@ Proof.
       firstorder.
   + (*Unfortunately, the maximal lengths for all t' are currently hidden underneath existential quantifiers, and not easily accessible.
       We begin by moving them into an existentially quantified list.*)
-    assert (exists l', length l' = length (enumerate_steps t) /\ List.Forall (fun (p : term * nat) => let (t', n) := p in forall l, reduction_sequence (t' :: l) -> length l <= n) (List.combine (enumerate_steps t) l')) as [l' [Hlen Hl']].
+    assert (exists l', length l' = length (enumerate_steps t) /\ List.Forall (fun (p : prod term nat) => let (t', n) := p in forall l, reduction_sequence (t' :: l) -> length l <= n) (List.combine (enumerate_steps t) l')) as [l' [Hlen Hl']].
     * induction H as [|t' l Ht' HForall IHForall].
       -- exists nil. firstorder.
       -- destruct Ht' as [_ [n Hn]].
@@ -317,6 +317,27 @@ Proof.
       * subst. now apply IHn.
 Qed.
 
+Lemma subst_steps t u u': u ~> u' -> t.[u/] ~>* t.[u'/].
+Proof.
+  intros Hstep.
+  apply par_red_to_beta_star.
+  apply par_red_subst_par_red.
+  2: apply par_red_refl.
+  intros [| v].
+  - asimpl. now apply beta_to_par_red.
+  - asimpl. apply par_red_refl.
+Qed.
+
+Lemma SN_inverted_star t t': SN t -> t ~>* t' -> SN t'.
+Proof.
+  intros Hsn Hsteps.
+  induction Hsteps.
+  - eapply SN_inverted; eassumption.
+  - assumption.
+  - firstorder.
+Qed.
+  
+
 Lemma nested_app_app t inner outer : (nested_app (nested_app t inner) outer) = nested_app t (outer ++ inner).
 Proof.
   induction outer as [| t'  outer IH].
@@ -324,7 +345,7 @@ Proof.
   - cbn. rewrite IH. reflexivity.
 Qed.
 
-Lemma max_steps_decr t n: (forall l, reduction_sequence (t :: l) -> length l <= n) -> forall t', t ->β t' -> forall l, reduction_sequence (t' :: l) -> length l <= pred n.
+Lemma max_steps_decr t n: (forall l, reduction_sequence (t :: l) -> length l <= n) -> forall t', t ~> t' -> forall l, reduction_sequence (t' :: l) -> length l <= pred n.
 Proof.
   intros Hmax t' Hstep.
   destruct n.
@@ -341,7 +362,7 @@ Proof.
     split; assumption.
 Qed.
 
-Lemma max_steps_nonzero t t' n: (t ->β t') -> (forall l, reduction_sequence (t :: l) -> length l <= n) -> n > 0.
+Lemma max_steps_nonzero t t' n: (t ~> t') -> (forall l, reduction_sequence (t :: l) -> length l <= n) -> n > 0.
 Proof.
   intros Hstep Hlen.
   specialize (Hlen [t']%list).
@@ -349,26 +370,26 @@ Proof.
 Qed.
 
 Lemma max_steps_list_decr t1 t2 l l' outer :
-  t1 ->β t2 -> 
+  t1 ~> t2 -> 
   length l' = length (outer ++ t1 :: l) -> 
       List.Forall
-        (fun p : term * nat =>
+        (fun p : prod term nat =>
          let (t, n) := p in
          forall l : list term,
          match l with
          | []%list => True
-         | (t0 :: _)%list => t ->β t0 /\ reduction_sequence l
+         | (t0 :: _)%list => t ~> t0 /\ reduction_sequence l
          end -> length l <= n) (List.combine (outer ++ t1 :: l) l') -> 
   exists l'',
   List.list_sum l'' < List.list_sum l'
   /\ length l'' = length (outer ++ t1 :: l)
   /\ List.Forall
-  (fun p : term * nat =>
+  (fun p : prod term nat =>
    let (t0, n) := p in
    forall l0 : list term,
    match l0 with
    | []%list => True
-   | (t2 :: _)%list => t0 ->β t2 /\ reduction_sequence l0
+   | (t2 :: _)%list => t0 ~> t2 /\ reduction_sequence l0
    end -> length l0 <= n) (List.combine (outer ++ t1 :: l) l'').
 Proof.
   intros Hstep Hlen Hl'.
@@ -404,7 +425,7 @@ Admitted.
    The current attempt uses the maximal numbers of steps (as determined by max_steps),
    but is stuck at destructing the actual reduction step. Presumably, induction is needed, but I have not yet found a version that yields suitable induction hypotheses.
 *)
-Lemma base_case t u l : SN (nested_app t.[u/] l) -> SN u -> forall t', nested_app (App (Lam t) u) l ->β t' -> SN t'.
+Lemma base_case t u l : SN (nested_app t.[u/] l) -> SN u -> forall t', nested_app (App (Lam t) u) l ~> t' -> SN t'.
 Proof.
   intros Hsn Hsnu.
   (*determine the maximum number of steps for t*)
@@ -422,7 +443,7 @@ Proof.
   assert (exists nu, forall l, reduction_sequence (u :: l) -> length l <= nu) as [nu Hnu].
   { apply max_steps. assumption. }
   (*determine the maximum number of steps for all terms in l*)
-  assert (exists l', length l' = length l /\ List.Forall (fun (p : term * nat) => let (t, n) := p in forall l, reduction_sequence (t :: l) -> length l <= n) (List.combine l l')) as [l' Hl'].
+  assert (exists l', length l' = length l /\ List.Forall (fun (p : prod term nat) => let (t, n) := p in forall l, reduction_sequence (t :: l) -> length l <= n) (List.combine l l')) as [l' Hl'].
   { induction l.
     - exists nil; firstorder.
     - cbn in Hsn.
@@ -496,7 +517,14 @@ Proof.
       1: apply (max_steps_nonzero u _ nu) in Hstep.
       1: lia.
       1: assumption.
-      admit. (* requires (u ->β u') -> (t.[u/] ->β* t.[u'/]), which we have not yet shown *)
+      clear - Hsn Hsnu Hstep.
+      eapply SN_inverted_star. 1: exact Hsn.
+      induction outer as [| a outer IHouter].
+      * cbn. now apply subst_steps.
+      * cbn. apply beta_star_app. 2: apply beta_star_refl.
+        apply IHouter.
+        eapply SN_sub_term. 1: exact Hsn.
+        cbn. constructor.
     + inversion Heqtrm; subst.
       change (SN (nested_app (nested_app (App (Lam t) u) (t' :: l)) outer)).
       rewrite (nested_app_app).
@@ -514,7 +542,7 @@ Proof.
       2: exact Hl''.
       lia.
   - destruct l; cbn in Heqtrm; congruence.
-Admitted.
+Qed.
 
 (*Lemma 3.2.1 of the lecture notes.*)
 Lemma reducible_is_SN_variant_1 (A : type):
@@ -703,4 +731,4 @@ Proof.
   intros.
   apply reducible_var with Γ.
   now apply Typing_Var.
-Qed.
+Qed
