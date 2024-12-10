@@ -467,7 +467,14 @@ Proof.
       1: apply (max_steps_nonzero t _ nt) in H0.
       1: lia.
       1: assumption.
-      admit.
+      clear - Hsn H0.
+      eapply SN_inverted. 1: exact Hsn.
+      induction outer as [| a outer IHouter].
+      * cbn. now apply beta_subst.
+      * cbn. constructor. 
+        apply IHouter.
+        eapply SN_sub_term. 1: exact Hsn.
+        cbn. constructor.
     + change (App s' t0) with (nested_app s' [t0]).
       rewrite nested_app_app.
       inversion Heqtrm; subst.
@@ -489,7 +496,7 @@ Proof.
       1: apply (max_steps_nonzero u _ nu) in Hstep.
       1: lia.
       1: assumption.
-      admit.
+      admit. (* requires (u ->β u') -> (t.[u/] ->β* t.[u'/]), which we have not yet shown *)
     + inversion Heqtrm; subst.
       change (SN (nested_app (nested_app (App (Lam t) u) (t' :: l)) outer)).
       rewrite (nested_app_app).
