@@ -105,11 +105,11 @@ Fixpoint nested_app t l :=
 
 Lemma atomic_step t s : atomic' t -> t ~> s -> atomic' s.
 Proof.
-  induction t in s |- *; cbn.
+  induction t as [|t1 IH1 t2 IH2|] in s |- *; cbn.
   - inversion 2.
   - intros Hat Hstep. inversion Hstep; subst.
     + contradiction.
-    + cbn. apply IHt1; assumption.
+    + cbn. apply IH1; assumption.
     + cbn. assumption.
   - tauto.
 Qed.
@@ -119,23 +119,23 @@ Proof.
   intros [Hat Hsnt] Hsnu.
   split.
   - tauto.
-  - induction Hsnt in Hat, u, Hsnu |-*.
-    induction Hsnu in H0 |- *.
+  - induction Hsnt as [t Hsnt IHsnt] in Hat, u, Hsnu |-*.
+    induction Hsnu as [u Hsnu IHsnu].
     constructor. intros t' Hstep.
     inversion Hstep; subst.
     + contradiction.
-    + apply H0.
+    + apply IHsnt.
       * assumption.
       * eapply atomic_step; eassumption.
       * constructor. assumption.
-    + apply H2. 1: assumption. assumption.
+    + now apply IHsnu.
 Qed.
 
-Lemma SNaa_ind_pair (P : term -> term -> Prop):
+Lemma SN_ind_pair (P : term -> term -> Prop):
   (forall t u, (forall t' u', ((t = t' /\ u ~> u') \/ (t ~> t' /\ u = u')) -> P t' u') -> P t u)
     -> forall t u, SN t -> SN u -> P t u.
 Proof.
-  intros IH ? ? Hsnt.
+  intros IH t u Hsnt.
   revert u.
 
   induction Hsnt as [? _ IHt].
@@ -304,7 +304,7 @@ Proof.
   intros P Hind n.
   enough (forall m, m <= n -> P m) as H.
   - apply H. constructor.
-  - induction n.
+  - induction n as [| n IHn].
     + intros m. destruct m.
       * intros _. apply Hind.
         lia.
@@ -389,7 +389,7 @@ Proof.
       lia.
     + cbn in *. specialize (IH ind).
       apply PeanoNat.lt_S_n in Hlen.
-      firstorder. unfold List.list_sum in H. lia.
+      firstorder. unfold List.list_sum in *. lia.
 Qed.
 
 Lemma update_length {A : Type} (l: list A) n v : length (update_nth n l v) = length l.
@@ -474,7 +474,7 @@ Proof.
   clear - Hdecr Hl' Hlen.
   unfold ind in *.
 
-  induction outer in l', Hl', n, Hlen, Hdecr |- *.
+  induction outer as [| x outer IHouter] in l', Hl', n, Hlen, Hdecr |- *.
   - cbn in *. destruct l'.
     + constructor.
     + constructor.
@@ -516,7 +516,7 @@ Proof.
   { apply max_steps. assumption. }
   (*determine the maximum number of steps for all terms in l*)
   assert (exists l', length l' = length l /\ List.Forall (fun (p : prod term nat) => let (t, n) := p in forall l, reduction_sequence (t :: l) -> length l <= n) (List.combine l l')) as [l' Hl'].
-  { induction l.
+  { induction l as [| a l IHl].
     - exists nil; firstorder.
     - cbn in Hsn.
       assert (SN a) as Ha.
@@ -531,7 +531,7 @@ Proof.
       cbn. firstorder.
   }
   (*We wish to do induction on the sum of all these step numbers: This will allow us to use the induction hypothesis for any step in any of these terms.*)
-  remember (nt + nu + List.list_sum l') as n.
+  remember (nt + nu + List.list_sum l') as n eqn:Heqn.
   (*We do induction on n with everything else quantified.*)
   induction n as [n IH] using nat_strong_ind in t, u, l, Hsn, Hsnu, nt, Hnt, nu, Hnu, l', Hl', Heqn |- *.
   intros t' Hstep.
@@ -541,26 +541,26 @@ Proof.
   cbn in Hstep.
   remember nil as outer.
   
-  remember (nested_app (App (Lam t) u) l) as trm.
-  induction Hstep in t, u, l, outer, Hsn, Hsnu, nt, Hnt, nu, Hnu, l', Hl', Heqn, Heqtrm |- *.
+  remember (nested_app (App (Lam t) u) l) as trm eqn:Heqtrm.
+  induction Hstep as [| ta tb tc Hstep IHstep | ta tb tc Hstep IHstep | ta tb Hstep IHstep] in t, u, l, outer, Hsn, Hsnu, nt, Hnt, nu, Hnu, l', Hl', Heqn, Heqtrm |- *.
   - subst.
-    destruct l.
+    destruct l as [| ? l].
     + cbn in Heqtrm. inversion Heqtrm; subst. rewrite List.app_nil_r in Hsn. assumption.
-+ cbn in Heqtrm. inversion Heqtrm; subst.
+    + cbn in Heqtrm. inversion Heqtrm; subst.
       destruct l; cbn in *; congruence.
   - subst.
-    destruct l; cbn in *.
+    destruct l as [| t1 l]; cbn in *.
     + inversion Heqtrm; subst.
-      inversion Hstep; subst.
+      inversion Hstep as [| | | H1 H2 Hstep' H3 H4]; subst.
       constructor. eapply IH.
       3, 5: eassumption.
       5: reflexivity.
       4: rewrite List.app_nil_r in Hl'; exact Hl'.
       3: apply (max_steps_decr t); eassumption.
-      1: apply (max_steps_nonzero t _ nt) in H0.
+      1: apply (max_steps_nonzero t _ nt) in Hstep'.
       1: lia.
       1: assumption.
-      clear - Hsn H0.
+      clear - Hsn Hstep'.
       eapply SN_inverted. 1: exact Hsn.
       induction outer as [| a outer IHouter].
       * cbn. now apply beta_subst.
@@ -568,17 +568,17 @@ Proof.
         apply IHouter.
         eapply SN_sub_term. 1: exact Hsn.
         cbn. constructor.
-    + change (App s' t0) with (nested_app s' [t0]).
+    + change (App tb tc) with (nested_app tb [tc]).
       rewrite nested_app_app.
       inversion Heqtrm; subst.
-      eapply IHHstep.
+      eapply IHstep.
       2: exact Hsnu.
       2: exact Hnt.
       2: exact Hnu.
       3, 4: reflexivity.
       1, 2: assert ((outer ++ [t1]) ++ l = outer ++ (t1 :: l))%list as -> by (rewrite <- List.app_assoc; reflexivity).
       all: assumption.
-  - destruct l; cbn in *.
+  - destruct l as [| t1 l]; cbn in *.
     + inversion Heqtrm; subst.
       constructor. eapply IH.
       7: reflexivity.
@@ -598,10 +598,10 @@ Proof.
         eapply SN_sub_term. 1: exact Hsn.
         cbn. constructor.
     + inversion Heqtrm; subst.
-      change (SN (nested_app (nested_app (App (Lam t) u) (t' :: l)) outer)).
+      change (SN (nested_app (nested_app (App (Lam t) u) (tc :: l)) outer)).
       rewrite (nested_app_app).
       destruct Hl' as [Hl'1 Hl'2].
-      pose proof (max_steps_list_decr t1 t' l l' outer Hstep Hl'1 Hl'2) as (l'' & Hdecr & Hl'').
+      pose proof (max_steps_list_decr t1 tc l l' outer Hstep Hl'1 Hl'2) as (l'' & Hdecr & Hl'').
       constructor.
       eapply IH.
       3: exact Hsnu.
