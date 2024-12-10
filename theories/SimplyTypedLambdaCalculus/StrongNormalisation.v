@@ -324,6 +324,78 @@ Proof.
   - cbn. rewrite IH. reflexivity.
 Qed.
 
+Lemma max_steps_decr t n: (forall l, reduction_sequence (t :: l) -> length l <= n) -> forall t', t ->β t' -> forall l, reduction_sequence (t' :: l) -> length l <= pred n.
+Proof.
+  intros Hmax t' Hstep.
+  destruct n.
+  - exfalso.
+    specialize (Hmax [t']%list).
+    cbn in Hmax. firstorder. lia.
+  - cbn.
+    intros l.
+    specialize (Hmax (t' :: l)%list).
+    cbn in Hmax.
+    intros Hmx'.
+    apply PeanoNat.Nat.succ_le_mono.
+    apply Hmax.
+    split; assumption.
+Qed.
+
+Lemma max_steps_nonzero t t' n: (t ->β t') -> (forall l, reduction_sequence (t :: l) -> length l <= n) -> n > 0.
+Proof.
+  intros Hstep Hlen.
+  specialize (Hlen [t']%list).
+  cbn in Hlen. firstorder.
+Qed.
+
+Lemma max_steps_list_decr t1 t2 l l' outer :
+  t1 ->β t2 -> 
+  length l' = length (outer ++ t1 :: l) -> 
+      List.Forall
+        (fun p : term * nat =>
+         let (t, n) := p in
+         forall l : list term,
+         match l with
+         | []%list => True
+         | (t0 :: _)%list => t ->β t0 /\ reduction_sequence l
+         end -> length l <= n) (List.combine (outer ++ t1 :: l) l') -> 
+  exists l'',
+  List.list_sum l'' < List.list_sum l'
+  /\ length l'' = length (outer ++ t1 :: l)
+  /\ List.Forall
+  (fun p : term * nat =>
+   let (t0, n) := p in
+   forall l0 : list term,
+   match l0 with
+   | []%list => True
+   | (t2 :: _)%list => t0 ->β t2 /\ reduction_sequence l0
+   end -> length l0 <= n) (List.combine (outer ++ t1 :: l) l'').
+Proof.
+  intros Hstep Hlen Hl'.
+  assert (List.In t1 (outer ++ t1 :: l)) as Hin.
+  - auto with datatypes.
+  - apply List.In_nth with (d := Var 0) in Hin as (ind & Hind & Hin).
+    rewrite (List.Forall_forall) in Hl'.
+    pose (List.nth ind l' 0) as n.
+    assert (List.In (t1, n) (List.combine (outer ++ t1 :: l) l')) as H.
+    { assert ((t1, n) = List.nth ind (List.combine (outer ++ t1 :: l) l') (Var 0, 0)) as Hnth.
+      - rewrite <- Hin.
+        rewrite List.combine_nth.
+        + repeat f_equal.
+          congruence.
+        + rewrite Hlen. congruence.
+      - rewrite Hnth. apply List.nth_In.
+        rewrite List.combine_length.
+        lia.
+    }
+    apply Hl' in H.
+    pose proof (max_steps_decr t1 n H t2 Hstep) as Hdecr.
+    pose proof (max_steps_nonzero t1 t2 n Hstep H) as Hnz.
+    
+    (*ideally, we would like to have some kind of list update function here with the desired properties. We don't.*)
+    (*induction on outer won't work: we don't get from List.nth ind (t1 :: l) _ = t1 that ind = 0. *)
+Admitted.
+
 (* Lemma 3.2.1 statement (3) for the base case, where the entire term is of some atomic type.
    Formalizing this proof is difficult:
    While intuitively, any reduction step is either within any subterm (not changing the specified shape) or reduction of the leftmost application,
@@ -387,7 +459,15 @@ Proof.
     destruct l; cbn in *.
     + inversion Heqtrm; subst.
       inversion Hstep; subst.
-      constructor. eapply IH; admit.
+      constructor. eapply IH.
+      3, 5: eassumption.
+      5: reflexivity.
+      4: rewrite List.app_nil_r in Hl'; exact Hl'.
+      3: apply (max_steps_decr t); eassumption.
+      1: apply (max_steps_nonzero t _ nt) in H0.
+      1: lia.
+      1: assumption.
+      admit.
     + change (App s' t0) with (nested_app s' [t0]).
       rewrite nested_app_app.
       inversion Heqtrm; subst.
@@ -400,16 +480,32 @@ Proof.
       all: assumption.
   - destruct l; cbn in *.
     + inversion Heqtrm; subst.
-      constructor. eapply IH; admit.
+      constructor. eapply IH.
+      7: reflexivity.
+      6: rewrite List.app_nil_r in Hl'; exact Hl'.
+      3: now apply (SN_inverted u).
+      3: eassumption.
+      3: apply (max_steps_decr u); eassumption.
+      1: apply (max_steps_nonzero u _ nu) in Hstep.
+      1: lia.
+      1: assumption.
+      admit.
     + inversion Heqtrm; subst.
       change (SN (nested_app (nested_app (App (Lam t) u) (t' :: l)) outer)).
       rewrite (nested_app_app).
+      destruct Hl' as [Hl'1 Hl'2].
+      pose proof (max_steps_list_decr t1 t' l l' outer Hstep Hl'1 Hl'2) as (l'' & Hdecr & Hl'').
       eapply IH.
       2: exact Hsn.
       2: exact Hsnu.
       2, 3: eassumption.
       3: reflexivity.
-      all: admit.
+      3: {
+        clear - Hstep.
+         induction outer; now constructor.
+      }
+      2: exact Hl''.
+      lia.
   - destruct l; cbn in Heqtrm; congruence.
 Admitted.
 
