@@ -356,31 +356,43 @@ Proof.
   induction n as [n IH] using nat_strong_ind in t, u, l, Hsn, Hsnu, nt, Hnt, nu, Hnu, l', Hl', Heqn |- *.
   intros t' Hstep.
 
-  (*below, my current best attempt at doing this proof, using induction on the derivation of the step. However, the induction hypothesis is not of a suitable shape.*)
-  (*some subgoals are marked as chore and admitted: they should be provable but just require a bit of work.*)
+  change l with (app nil l) in *.
+  change (SN (nested_app t' nil)).
+  cbn in Hstep.
+  remember nil as outer.
+  
   remember (nested_app (App (Lam t) u) l) as trm.
-  induction Hstep in t, u, l, Hsn, Hsnu, nt, Hnt, nu, Hnu, l', Hl', Heqn, Heqtrm |- *.
+  induction Hstep in t, u, l, outer, Hsn, Hsnu, nt, Hnt, nu, Hnu, l', Hl', Heqn, Heqtrm |- *.
   - subst.
     destruct l.
-    + cbn in Heqtrm. inversion Heqtrm; subst. exact Hsn.
-    + cbn in Heqtrm. inversion Heqtrm; subst.
+    + cbn in Heqtrm. inversion Heqtrm; subst. rewrite List.app_nil_r in Hsn. assumption.
++ cbn in Heqtrm. inversion Heqtrm; subst.
       destruct l; cbn in *; congruence.
   - subst.
-    (* this _should_ be an application of IHHstep somehow, but the hypothesis is not of the right shape.
-       this may be doable by strengthening the statement to wrap it in another nested_app, then proving things about nested_app and append?
-    *)
-    admit.
-  - destruct l.
-    + cbn in Heqtrm. inversion Heqtrm; subst.
-      admit. (*chore*)
-    + cbn in Heqtrm. inversion Heqtrm; subst.
-      destruct l'. 1: cbn in *; firstorder; congruence.
-      change (SN (nested_app (App (Lam t) u) (t' :: l))).
-      eapply IH with (l := cons t1 l).
-      8: now constructor.
-      2-5: eassumption.
+    destruct l; cbn in *.
+    + inversion Heqtrm; subst.
+      inversion Hstep; subst.
+      constructor. eapply IH; admit.
+    + assert (nested_app (App s' t0) outer = nested_app s' (outer ++ [t0])) as -> by admit.
+      inversion Heqtrm; subst.
+      eapply IHHstep.
+      2: exact Hsnu.
+      2: exact Hnt.
+      2: exact Hnu.
+      3, 4: reflexivity.
+      1, 2: assert ((outer ++ [t1]) ++ l = outer ++ (t1 :: l))%list as -> by admit.
+      all: assumption.
+  - destruct l; cbn in *.
+    + inversion Heqtrm; subst.
+      constructor. eapply IH; admit.
+    + inversion Heqtrm; subst.
+      change (SN (nested_app (nested_app (App (Lam t) u) (t' :: l)) outer)).
+      assert ((nested_app (nested_app (App (Lam t) u) (t' :: l)) outer) = nested_app (App (Lam t) u) (outer ++ (t' :: l))) as -> by admit.
+      eapply IH.
+      2: exact Hsn.
+      2: exact Hsnu.
+      2, 3: eassumption.
       3: reflexivity.
-      (*chore : since t1 ->β t', there is an n' < n with the desired property; instantiate ?l' with n'::l'. the second subgoal will be annoying.*)
       all: admit.
   - destruct l; cbn in Heqtrm; congruence.
 Admitted.
