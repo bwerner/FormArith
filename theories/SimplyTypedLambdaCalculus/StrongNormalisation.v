@@ -317,6 +317,13 @@ Proof.
       * subst. now apply IHn.
 Qed.
 
+Lemma nested_app_app t inner outer : (nested_app (nested_app t inner) outer) = nested_app t (outer ++ inner).
+Proof.
+  induction outer as [| t'  outer IH].
+  - reflexivity.
+  - cbn. rewrite IH. reflexivity.
+Qed.
+
 (* Lemma 3.2.1 statement (3) for the base case, where the entire term is of some atomic type.
    Formalizing this proof is difficult:
    While intuitively, any reduction step is either within any subterm (not changing the specified shape) or reduction of the leftmost application,
@@ -330,7 +337,15 @@ Proof.
   intros Hsn Hsnu.
   (*determine the maximum number of steps for t*)
   assert (exists nt, forall l, reduction_sequence (t :: l) -> length l <= nt) as [nt Hnt].
-  { admit. } (*chore: we don't have a lemma to do this yet, so induction on l?*)
+  { apply max_steps.
+    induction l as [| s l IH].
+    - eapply SN_subst. 2: reflexivity.
+      exact Hsn.
+    - apply IH.
+      eapply SN_sub_term.
+      + exact Hsn.
+      + constructor.
+  }
   (*determine the maximum number of steps for u*)
   assert (exists nu, forall l, reduction_sequence (u :: l) -> length l <= nu) as [nu Hnu].
   { apply max_steps. assumption. }
@@ -373,21 +388,22 @@ Proof.
     + inversion Heqtrm; subst.
       inversion Hstep; subst.
       constructor. eapply IH; admit.
-    + assert (nested_app (App s' t0) outer = nested_app s' (outer ++ [t0])) as -> by admit.
+    + change (App s' t0) with (nested_app s' [t0]).
+      rewrite nested_app_app.
       inversion Heqtrm; subst.
       eapply IHHstep.
       2: exact Hsnu.
       2: exact Hnt.
       2: exact Hnu.
       3, 4: reflexivity.
-      1, 2: assert ((outer ++ [t1]) ++ l = outer ++ (t1 :: l))%list as -> by admit.
+      1, 2: assert ((outer ++ [t1]) ++ l = outer ++ (t1 :: l))%list as -> by (rewrite <- List.app_assoc; reflexivity).
       all: assumption.
   - destruct l; cbn in *.
     + inversion Heqtrm; subst.
       constructor. eapply IH; admit.
     + inversion Heqtrm; subst.
       change (SN (nested_app (nested_app (App (Lam t) u) (t' :: l)) outer)).
-      assert ((nested_app (nested_app (App (Lam t) u) (t' :: l)) outer) = nested_app (App (Lam t) u) (outer ++ (t' :: l))) as -> by admit.
+      rewrite (nested_app_app).
       eapply IH.
       2: exact Hsn.
       2: exact Hsnu.
