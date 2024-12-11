@@ -1,53 +1,85 @@
+(**
+  This file defines the necessary to type the terms defined in [Terms.v].
+  In particular, here are defined the [type]s and the [typing] judgements.
+*)
+
 From FormArith Require Export Base.
 From FormArith.SimplyTypedLambdaCalculus Require Import Term.
 
+(** * Typing *)
 
+(** ** Definitions *)
+
+(** *** Types of the simply-typed λ-calculus.
+
+  Here, the classical types are extended with the product and sum types.
+*)
 Inductive type :=
+  (** Base type *)
   | Base
+  
+  (** Arrow type: [A → B] *)
   | Arr (A B: type)
+
+  (** Prod type: [A × B] *)
   | Prod (A B: type)
+
+  (** Sum type: [A + B] *)
   | Sum (A B: type).
 
-
+(** Notation of a typing judgement. *)
 Reserved Notation "Γ ⊢ t : A" (at level 60, t at next level).
 
+(** *** Typing rules of simply-typed λ-calculus *)
 Inductive typing (Γ: var -> type): term -> type -> Prop :=
-  (* Classical lambda calculus *)
+  (** **** Classical λ-calculus *)
+  
+  (** Γ(x) = A ⇒ Γ ⊢ x : A *)
   | Typing_Var (x: var) (A: type):
       Γ x = A -> Γ ⊢ Var x : A
 
+  (** (Γ ⊢ s : A → B) ∧ (Γ ⊢ t : A) ⇒ Γ ⊢ s t : B *)
   | Typing_App (s t: term) (A B: type) :
       Γ ⊢ s : Arr A B ->
       Γ ⊢ t : A ->
       Γ ⊢ App s t : B
 
+  (** Γ, A ⊢ s: B ⇒ Γ ⊢ λ s : A → B*)
   | Typing_Lam (s: term) (A B: type):
       A .: Γ ⊢ s : B ->
       Γ ⊢ Lam s : Arr A B
 
-  (* Pairs and projections *)
+  (** **** Pairs and projections *)
+
+  (** Γ ⊢ s : (A × B) ⇒ Γ ⊢ π1(s) : A *)
   | Typing_ProjL (s: term) (A B: type):
       Γ ⊢ s : Prod A B ->
       Γ ⊢ ProjL s : A
 
+  (** Γ ⊢ s : (A × B) ⇒ Γ ⊢ π2(s) : A *)
   | Typing_ProjR (s: term) (A B: type):
       Γ ⊢ s : Prod A B ->
       Γ ⊢ ProjR s : B
 
+  (** (Γ ⊢ s : A) ∧ (Γ ⊢ t : B) ⇒ Γ ⊢ (s, t) : (A × B) *)
   | Typing_Pair (s t: term) (A B: type):
       Γ ⊢ s : A ->
       Γ ⊢ t : B ->
       Γ ⊢ Pair s t : Prod A B
 
-  (* Pattern matching and injections *)
+  (** **** Pattern matching and injections *)
+
+  (** Γ ⊢ s : A ⇒ Γ ⊢ i(s) : A + B *)
   | Typing_InjL (s: term) (A B: type):
       Γ ⊢ s : A ->
       Γ ⊢ InjL s : Sum A B
 
+  (** Γ ⊢ s : B ⇒ Γ ⊢ j(s) : A + B *)
   | Typing_InjR (s: term) (A B: type):
       Γ ⊢ s : B ->
       Γ ⊢ InjR s : Sum A B
 
+  (** (Γ ⊢ t : A + B) ∧ (Γ, A ⊢ u : C) ∧ (Γ, B ⊢ v : C) ⇒ Γ ⊢ δ(t, u, v) : C *)
   | Typing_Sum (t u v: term) (A B C: type):
       Γ ⊢ t : Sum A B ->
       (A .: Γ) ⊢ u : C ->
@@ -56,6 +88,9 @@ Inductive typing (Γ: var -> type): term -> type -> Prop :=
   where "Γ ⊢ t : A" := (typing Γ t A).
 
 
+(** ** Properties *)
+
+(** Weakening of a typing judgement. *)
 Lemma type_weakening (Γ: var -> type) (s: term) (A: type):
   Γ ⊢ s : A ->
     forall (Γ': var -> type) (x': var -> var),
@@ -73,7 +108,7 @@ Proof.
     ? ? ? ? A B C _ IH1 _ IH2 _ IH3
   ]; intros ? ? HΓ; simpl.
 
-  (* Classical lambda calculus *)
+  (* Classical λ-calculus *)
   - apply Typing_Var.
     now rewrite HΓ in H.
 
@@ -111,6 +146,7 @@ Proof.
       now rewrite HΓ; asimpl.
 Qed.
 
+(** Γ ⊢ s : A ⇒ Γ' ⊢ s[σ] : A, where Γ' ⊢ σ(x) : Γ(x) for every variable x *)
 Lemma type_subst (Γ Γ': var -> type) (s: term) (A: type) (σ: var -> term):
   Γ ⊢ s : A ->
   (forall (x: var), Γ' ⊢ σ x : Γ x) ->
@@ -167,6 +203,7 @@ Proof.
     now apply IH with Γ.
 Qed.
 
+(** Type preservation, i.e subject reduction *)
 Lemma type_preservation (Γ: var -> type) (s t: term) (A: type):
   Γ ⊢ s : A -> s ~> t -> Γ ⊢ t : A.
 Proof.

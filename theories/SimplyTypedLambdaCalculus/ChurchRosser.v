@@ -1,74 +1,114 @@
+(**
+  This file contains a complete proof of the confluence of the λ-calculus. More
+  precisely, this means that the β-reduction on λ-terms satisfies the
+  Church-Rosser propery.
+*)
+
 From FormArith.SimplyTypedLambdaCalculus Require Import Term.
 
+(** * λ-calculus verifies the Church-Rosser property *)
 
+(** ** Definitions *)
+
+(** *** 
+  Local confluence
+  
+  A rewrite rule → is said to be locally confluent if:
+  ∀ t u v, t → u ∧ t → v ⇒ ∃ w, u → w ∧ v → w.
+*)
 Definition local_confluence (P: term -> term -> Prop): Prop :=
   forall (t u v: term),
     P t u ->
     P t v ->
     exists (w : term), P u w /\ P v w.
 
+(** ***
+  Church-Rosser propery
+
+  It is defined as the local confluence for the reflexive and transitive
+  closure of the rewrite rule.
+*)
 Definition CR (P: term -> term -> Prop) := local_confluence P*.
 
-
+(** Notation for the parallel reduction. *)
 Reserved Notation "t >=> t'" (at level 60).
 
+(** *** Parallel reduction
+
+  This is a rewrite rule that is morally the same as appliying as much rewrite
+  rules with the β-reduction as possible as each step.
+*)
 Inductive par_red: term -> term -> Prop :=
+  (** Parallel substitution rule. *)
   | ParRed_Subst (s s' t t': term):
     s >=> s' ->
     t >=> t' ->
     App (Lam s) t >=> s'.[t'/]
 
+  (** A variable can be reduced as itself. *)
   | ParRed_Var (v: var): (Var v) >=> (Var v)
-    
+
+  (** Parallel substitution of the application. *)
   | ParRed_App (s s' t t': term) :
     s >=> s' ->
     t >=> t' ->
     App s t >=> App s' t'
-    
+
+  (** Parallel substitution of the λ-abstraction. *)
   | ParRed_Lam (t t': term) :
     t >=> t' ->
     Lam t >=> Lam t'
 
+  (** Parallel substitution of the pair. *)
   | ParRed_Pair (s s' t t': term):
     s >=> s' ->
     t >=> t' ->
     Pair s t >=> Pair s' t'
 
+  (** Parallel substitution of π1. *)
   | ParRed_ProjL (s s': term):
     s >=> s' ->
     ProjL s >=> ProjL s'
 
+  (** Parallel substitution of π2. *)
   | ParRed_ProjR (s s': term):
     s >=> s' ->
     ProjR s >=> ProjR s'
 
+  (** Parallel substitution of the left projection of a pair. *)
   | ParRed_ProjL_Pair (s s' t: term):
     s >=> s' ->
     ProjL (Pair s t) >=> s'
 
+  (** Parallel substitution of the right projection of a pair. *)
   | ParRed_ProjR_Pair (s t t': term):
     t >=> t' ->
     ProjR (Pair s t) >=> t'
 
+  (** Parallel substitution of δ. *)
   | ParRed_Case (s s' t t' u u': term):
     s >=> s' ->
     t >=> t' ->
     u >=> u' ->
     Case s t u >=> Case s' t' u'
 
+  (** Parallel substitution of i. *)
   | ParRed_InjL (s s': term):
     s >=> s' ->
     InjL s >=> InjL s'
 
+  (** Parallel substitution of j. *)
   | ParRed_InjR (s s': term):
     s >=> s' ->
     InjR s >=> InjR s'
 
+  (** Parallel substitution of the left case in a pattern matching. *)
   | ParRed_Case_InjL (s s' t t' u: term):
     s >=> s' ->
     t >=> t' ->
     Case (InjL s) t u >=> t'.[s'/]
 
+  (** Parallel substitution of the right case in a pattern matching. *)
   | ParRed_Case_InjR (s s' t u u': term):
     s >=> s' ->
     u >=> u' ->
@@ -76,9 +116,14 @@ Inductive par_red: term -> term -> Prop :=
 
   where "t >=> t'" := (par_red t t').
 
+(** Reflexive and transitive closure of the parallel reduction. *)
 Notation "t >=>* t'" := (par_red* t t') (at level 70, t' at next level).
 
 
+(**
+  Returns the term that is as reduced as possible regarding the parallel
+  reduction.
+*)
 Fixpoint par_red_max_reduction (t: term): term :=
   match t with
   | Var v => Var v
@@ -116,6 +161,10 @@ Definition replace_inj (f1 f2: term -> term) (s u: term): term :=
   | _ => u
   end.
 
+
+(** ** Properties *)
+
+(** Reflexitivity of the parallel reduction. *)
 Lemma par_red_refl (t: term):
   t >=> t.
 Proof.
@@ -131,6 +180,7 @@ Proof.
   - now apply ParRed_InjR.
 Qed.
 
+(** The β-reduction is included in the parallel reduction. *)
 Lemma beta_to_par_red (s t: term):
   s ~> t -> s >=> t.
 Proof.
@@ -183,6 +233,7 @@ Proof.
     all: apply par_red_refl.
 Qed.
 
+(** The parallel reduction is stable under substitutions. *)
 Lemma par_red_subst (t t': term) (σ: var -> term):
   t >=> t' ->
   t.[σ] >=> t'.[σ].
@@ -359,7 +410,10 @@ Proof.
       now apply par_red_subst_up.
 Qed.
 
-
+(**
+  The parallel reduction is included in the reflexive and transitive closure of
+  the β-reduction.
+*)
 Lemma par_red_to_beta_star (s t: term):
   s >=> t -> s ~>* t.
 Proof.
@@ -452,6 +506,10 @@ Proof.
     now apply Beta_Case_InjR.
 Qed.
 
+(**
+  The parallel reduction is exactly the reflexive and transitive closure of the
+  β-reduction.
+*)
 Lemma beta_star_equiv_par_red_star (s t: term):
   s ~>* t <-> s >=>* t.
 Proof.
@@ -513,6 +571,7 @@ Proof.
   all: split; intros [? ?]; discriminate.
 Qed.
 
+(** Link between the parallel reduction and the function [par_red_max_reduction]. *)
 Lemma max_par_red (t t': term):
   t >=> t' -> t' >=> par_red_max_reduction t.
 Proof.
@@ -608,6 +667,7 @@ Proof.
     apply par_red_refl.
 Qed.
 
+(** The parallel reduction is locally confluent. *)
 Lemma local_confluence_par_red: local_confluence par_red.
 Proof.
   intros t u v Hu Hv.
@@ -640,6 +700,7 @@ Proof.
     now apply rt_trans with u'.
 Qed.
 
+(** The parallel reduction satisfies the Church-Rosser property. *)
 Lemma par_red_cr: CR par_red.
 Proof.
   intros t u v Hu Hv.
@@ -662,6 +723,7 @@ Proof.
     now apply rt_trans with v'.
 Qed.
 
+(** The β-reduction satisfies the Church-Rosser property. *)
 Theorem ChurchRosser: CR beta.
 Proof.
   intros t u v Hu Hv.
