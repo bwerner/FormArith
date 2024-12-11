@@ -1,7 +1,7 @@
 (**
   This section defines the first-order logic with some properties on derivations.
 
-  This file contains terms, formulas, and an evaluation of formulas into Coq [Prop].
+  This file contains terms, formulas, and an evaluation of formulas into Rocq [Prop].
 *)
 
 From FormArith Require Export Base.
@@ -28,7 +28,7 @@ Inductive term :=
   | TApp : nat -> list term -> term.
 
 (**
-  As Coq cannot induce an induction principle with induction hypothesis for
+  As Rocq cannot induce an induction principle with induction hypothesis for
   indirect terms, for example the ones in lists, here is a better induction
   principle that includes [Forall P terms] in the [TApp] case.
 *)
@@ -91,16 +91,16 @@ Inductive formula :=
 
 (**
   Auxiliary function of [formula_eval] that evaluates a term [t] in the
-  environment [sigma] with the environment of functions [fcts].
+  environment [σ] with the environment of functions [fcts].
 *)
-Fixpoint term_eval (fcts: nat -> list nat -> nat) (sigma: list nat) (t: term): nat :=
+Fixpoint term_eval (fcts: nat -> list nat -> nat) (σ: list nat) (t: term): nat :=
   match t with
-  | TVar idx => nth idx sigma 0
-  | TApp fct_idx terms => fcts fct_idx (map (term_eval fcts sigma) terms)
+  | TVar idx => nth idx σ 0
+  | TApp fct_idx terms => fcts fct_idx (map (term_eval fcts σ) terms)
   end.
 
 (**
-  Evaluates a formula into a Coq [Prop].
+  Evaluates a formula into a Rocq [Prop].
 
   Here, [fcts] is the environment of functions that are used in [term]
   definition: a function is denoted by a natural number, and maps a list of
@@ -108,21 +108,21 @@ Fixpoint term_eval (fcts: nat -> list nat -> nat) (sigma: list nat) (t: term): n
 
   With the same idea, [preds] is the environment of predicates that are the
   atomic formulas: a predicate is denoted by a natural number, and maps a list
-  of terms to a Coq [Prop].
+  of terms to a Rocq [Prop].
 *)
 Fixpoint formula_eval
     (fcts: nat -> list nat -> nat) (preds : nat -> list nat -> Prop)
-    (sigma: list nat) (phi: formula): Prop :=
+    (σ: list nat) (phi: formula): Prop :=
   match phi with
-  | FAtom pred_idx terms => preds pred_idx (map (term_eval fcts sigma) terms)
+  | FAtom pred_idx terms => preds pred_idx (map (term_eval fcts σ) terms)
 
-  | FConj phi phi' => (formula_eval fcts preds sigma phi) /\ (formula_eval fcts preds sigma phi')
-  | FDisj phi phi' => (formula_eval fcts preds sigma phi) \/ (formula_eval fcts preds sigma phi')
-  | FImp phi phi' => (formula_eval fcts preds sigma phi) -> (formula_eval fcts preds sigma phi')
+  | FConj phi phi' => (formula_eval fcts preds σ phi) /\ (formula_eval fcts preds σ phi')
+  | FDisj phi phi' => (formula_eval fcts preds σ phi) \/ (formula_eval fcts preds σ phi')
+  | FImp phi phi' => (formula_eval fcts preds σ phi) -> (formula_eval fcts preds σ phi')
 
   | FBot => False
   | FTop => True
 
-  | FForAll phi => forall x, formula_eval fcts preds (x :: sigma) phi
-  | FExists phi => exists x, formula_eval fcts preds (x :: sigma) phi
+  | FForAll phi => forall x, formula_eval fcts preds (x :: σ) phi
+  | FExists phi => exists x, formula_eval fcts preds (x :: σ) phi
   end.

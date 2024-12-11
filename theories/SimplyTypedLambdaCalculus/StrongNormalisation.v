@@ -14,7 +14,7 @@ From FormArith.SimplyTypedLambdaCalculus Require Import Term Typing.
   Intuitively, a [term] is strongly normalising if all of its successor for the
   β-reduction are also strongly normalising.
 
-  This definition is equivalent but easier to deal with in Coq than the usual
+  This definition is equivalent but easier to deal with in Rocq than the usual
   definition "There is no infinite path starting with this term".
 *)
 Inductive SN: term -> Prop :=
