@@ -83,14 +83,14 @@ Inductive Derivable: list formula -> formula -> Type :=
 
 (**
   This lemma states that if Γ ⊢ φ in our representation of the first-order
-  logic, then it also holds in Coq [Prop].
+  logic, then it also holds in Rocq [Prop].
 *)
 Lemma derivable_correctness (fcts: nat -> list nat -> nat) (preds: nat -> list nat -> Prop)
     (gamma: list formula) (phi: formula):
   Derivable gamma phi ->
-    forall (sigma: list nat),
-      (forall (idx: nat), formula_eval fcts preds sigma (nth idx gamma FTop)) ->
-        formula_eval fcts preds sigma phi.
+    forall (σ: list nat),
+      (forall (idx: nat), formula_eval fcts preds σ (nth idx gamma FTop)) ->
+        formula_eval fcts preds σ phi.
 Proof.
   induction 1 as
     [ | | ? ? _ IHind |
@@ -99,7 +99,7 @@ Proof.
       (* RDisj *) ? ? ? _ IHind | ? ? ? _ IHind | ? ? ? ? _ IHind1 _ IHind2 _ IHind3 |
       (* RForAll *) ? ? _ IHind | ? ? phi _ IHind |
       (* RExists *) ? ? phi _ IHind | ? ? ? _ IHind1 _ IHind2 ];
-    simpl in *; intros sigma IHtree; intros.
+    simpl in *; intros σ IHtree; intros.
 
   (* RAxiom *)
   - apply IHtree.
@@ -109,11 +109,11 @@ Proof.
 
   (* RBot_e *)
   - exfalso.
-    apply (IHind sigma).
+    apply (IHind σ).
     apply IHtree.
 
   (* RImp_i *)
-  - apply (IHind sigma).
+  - apply (IHind σ).
     intros [|].
     + assumption.
     + apply IHtree.
@@ -150,7 +150,7 @@ Proof.
     apply IHtree.
 
   (* RDisj_e *)
-  - destruct (IHind1 sigma IHtree).
+  - destruct (IHind1 σ IHtree).
     + apply IHind2.
       intros [|]; [ assumption | apply IHtree ].
     + apply IHind3.
@@ -159,30 +159,30 @@ Proof.
   (* RForAll_i *)
   - apply IHind; intros n.
     rewrite formula_lift_nth.
-    apply formula_eval_S with (sigma := nil).
+    apply formula_eval_S with (σ := nil).
     apply IHtree.
 
   (* RForAll_e *)
   - rewrite <- (term_lift_0 phi 0).
-    apply formula_eval_subst_lift with (sigma := nil).
+    apply formula_eval_subst_lift with (σ := nil).
     apply IHind.
     apply IHtree.
 
   (* RExists_i *)
-  - exists (term_eval fcts sigma phi).
-    apply formula_eval_subst_lift with (sigma := nil).
+  - exists (term_eval fcts σ phi).
+    apply formula_eval_subst_lift with (σ := nil).
     rewrite term_lift_0.
     apply IHind.
     apply IHtree.
 
   (* RExists_e *)
-  - destruct (IHind1 sigma IHtree) as [ n ? ].
-    apply formula_eval_S with (sigma := nil) (idx := n).
+  - destruct (IHind1 σ IHtree) as [ n ? ].
+    apply formula_eval_S with (σ := nil) (idx := n).
     apply IHind2.
 
     intros [|]; [ assumption |].
     rewrite formula_lift_nth.
-    apply formula_eval_S with (sigma := nil).
+    apply formula_eval_S with (σ := nil).
     apply IHtree.
 Qed.
 

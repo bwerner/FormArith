@@ -351,12 +351,12 @@ Qed.
 
 (** *** Evaluations *)
 
-Lemma term_eval_lift_n (fcts: nat -> list nat -> nat) (sigma sigma': list nat) (idx: nat) (t: term):
-  term_eval fcts (sigma ++ (idx :: sigma')) (term_lift (length sigma) 1 t) =
-    term_eval fcts (sigma ++ sigma') t.
+Lemma term_eval_lift_n (fcts: nat -> list nat -> nat) (σ σ': list nat) (idx: nat) (t: term):
+  term_eval fcts (σ ++ (idx :: σ')) (term_lift (length σ) 1 t) =
+    term_eval fcts (σ ++ σ') t.
 Proof.
   induction t as [ idx' | ? terms IHterms ]; simpl.
-  - destruct (PeanoNat.Nat.ltb_spec idx' (length sigma)); simpl.
+  - destruct (PeanoNat.Nat.ltb_spec idx' (length σ)); simpl.
     + rewrite !app_nth1 by assumption.
       reflexivity.
 
@@ -365,26 +365,26 @@ Proof.
       rewrite PeanoNat.Nat.sub_succ_l by assumption.
       simpl; lia.
 
-  - replace (map _ _) with (map (term_eval fcts (sigma ++ sigma')) terms); [ reflexivity |].
+  - replace (map _ _) with (map (term_eval fcts (σ ++ σ')) terms); [ reflexivity |].
     solve_TApp_case terms IHterms.
 Qed.
 
-Lemma term_eval_lift_0 (fcts: nat -> list nat -> nat) (sigma sigma': list nat) (t: term):
-  term_eval fcts sigma t = term_eval fcts (sigma' ++ sigma) (term_lift 0 (length sigma') t).
+Lemma term_eval_lift_0 (fcts: nat -> list nat -> nat) (σ σ': list nat) (t: term):
+  term_eval fcts σ t = term_eval fcts (σ' ++ σ) (term_lift 0 (length σ') t).
 Proof.
   induction t as [ idx | ? terms IHterms ]; simpl.
   - rewrite app_nth2 by lia.
     replace (idx + _ - _) with idx by lia.
     reflexivity.
 
-  - replace (map _ (map _ _)) with (map (term_eval fcts sigma) terms); [ reflexivity |].
+  - replace (map _ (map _ _)) with (map (term_eval fcts σ) terms); [ reflexivity |].
     solve_TApp_case terms IHterms.
 Qed.
 
 Lemma term_eval_lift_n_iter (fcts: nat -> list nat -> nat)
-    (sigma sigma': list nat) (idx: nat) (terms: list term):
-  map (term_eval fcts (sigma ++ idx :: sigma')) (map (term_lift (length sigma) 1) terms) =
-    map (term_eval fcts (sigma ++ sigma')) terms.
+    (σ σ': list nat) (idx: nat) (terms: list term):
+  map (term_eval fcts (σ ++ idx :: σ')) (map (term_lift (length σ) 1) terms) =
+    map (term_eval fcts (σ ++ σ')) terms.
 Proof.
   induction terms; simpl.
   { reflexivity. }
@@ -393,20 +393,20 @@ Proof.
   f_equal; assumption.
 Qed.
 
-Lemma term_eval_subst_lift (fcts: nat -> list nat -> nat) (sigma sigma': list nat) (t t': term):
-  term_eval fcts (sigma ++ sigma') (term_subst (length sigma) (term_lift 0 (length sigma) t') t)
-    = term_eval fcts (sigma ++ (term_eval fcts sigma' t') :: sigma') t.
+Lemma term_eval_subst_lift (fcts: nat -> list nat -> nat) (σ σ': list nat) (t t': term):
+  term_eval fcts (σ ++ σ') (term_subst (length σ) (term_lift 0 (length σ) t') t)
+    = term_eval fcts (σ ++ (term_eval fcts σ' t') :: σ') t.
 Proof.
   induction t as [ idx | ? terms IHterms ]; simpl.
   2: { f_equal; solve_TApp_case terms IHterms. }
 
-  destruct (PeanoNat.Nat.eqb_spec (length sigma) idx) as [ Heq |]; simpl.
+  destruct (PeanoNat.Nat.eqb_spec (length σ) idx) as [ Heq |]; simpl.
   { rewrite <- Heq.
     rewrite nth_middle.
     rewrite <- term_eval_lift_0.
     reflexivity. }
 
-  destruct (PeanoNat.Nat.ltb_spec (length sigma) idx) as [ Heq |]; simpl.
+  destruct (PeanoNat.Nat.ltb_spec (length σ) idx) as [ Heq |]; simpl.
   { destruct idx; [ lia |]; simpl.
     rewrite PeanoNat.Nat.sub_0_r.
     rewrite !app_nth2; [| lia.. ].
@@ -481,14 +481,14 @@ Proof.
 Qed.
 
 Lemma formula_eval_S (fcts: nat -> list nat -> nat) (preds: nat -> list nat -> Prop)
-    (phi: formula) (sigma sigma': list nat) (idx: nat):
-  formula_eval fcts preds (sigma ++ idx :: sigma') (formula_lift (length sigma) 1 phi) <->
-    formula_eval fcts preds (sigma ++ sigma') phi.
+    (phi: formula) (σ σ': list nat) (idx: nat):
+  formula_eval fcts preds (σ ++ idx :: σ') (formula_lift (length σ) 1 phi) <->
+    formula_eval fcts preds (σ ++ σ') phi.
 Proof.
-  generalize sigma.
+  generalize σ.
 
   induction phi as [ | ? IHphi1 ? IHphi2 | ? IHphi1 ? IHphi2 | ? IHphi1 ? IHphi2 | | | ? IHphi | ? IHphi ];
-    simpl; intros sigma''.
+    simpl; intros σ''.
 
   (* FAtom *)
   - rewrite term_eval_lift_n_iter.
@@ -517,28 +517,28 @@ Proof.
 
   (* FForAll *)
   - split; intros Hphi x.
-    all: apply (IHphi (x :: sigma'')).
+    all: apply (IHphi (x :: σ'')).
     all: apply Hphi.
 
   (* FExists *)
   - split; intros [x Heval].
     all: exists x.
-    all: apply (IHphi (x :: sigma'')).
+    all: apply (IHphi (x :: σ'')).
     all: apply Heval.
 Qed.
 
 Lemma formula_eval_subst_lift (fcts: nat -> list nat -> nat) (preds: nat -> list nat -> Prop)
-    (phi: formula) (sigma sigma': list nat) (t: term):
-  formula_eval fcts preds (sigma ++ sigma') (formula_subst (length sigma) (term_lift 0 (length sigma) t) phi)
-    <-> formula_eval fcts preds (sigma ++ (term_eval fcts sigma' t) :: sigma') phi.
+    (phi: formula) (σ σ': list nat) (t: term):
+  formula_eval fcts preds (σ ++ σ') (formula_subst (length σ) (term_lift 0 (length σ) t) phi)
+    <-> formula_eval fcts preds (σ ++ (term_eval fcts σ' t) :: σ') phi.
 Proof.
-  generalize sigma.
+  generalize σ.
 
   induction phi as [ ? terms | ? IHphi1 ? IHphi2 | ? IHphi1 ? IHphi2 | ? IHphi1 ? IHphi2 | | | ? IHphi | ? IHphi ];
-    simpl; intros sigma''.
+    simpl; intros σ''.
 
   (* FAtom *)
-  - replace (map _ _) with (map (term_eval fcts (sigma'' ++ term_eval fcts sigma' t :: sigma')) terms); [ reflexivity |].
+  - replace (map _ _) with (map (term_eval fcts (σ'' ++ term_eval fcts σ' t :: σ')) terms); [ reflexivity |].
     induction terms as [| ? ? IHterms ]; simpl.
     { reflexivity. }
 
@@ -570,28 +570,28 @@ Proof.
 
   (* FForAll *)
   - split; intros Hphi x; simpl.
-    + apply (IHphi (x :: sigma'')).
-      replace (term_lift _ _ _) with (term_lift 0 1 (term_lift 0 (length sigma'') t)).
+    + apply (IHphi (x :: σ'')).
+      replace (term_lift _ _ _) with (term_lift 0 1 (term_lift 0 (length σ'') t)).
       { apply Hphi. }
 
       rewrite term_lift_0_lift_0.
       reflexivity.
 
-    + specialize (IHphi (x :: sigma'')).
+    + specialize (IHphi (x :: σ'')).
       rewrite term_lift_0_lift_0.
       apply IHphi.
       apply Hphi.
 
   (* FExists *)
   - split; intros [x Hphi]; exists x; simpl.
-    + apply (IHphi (x :: sigma'')).
-      replace (term_lift _ _ _) with (term_lift 0 1 (term_lift 0 (length sigma'') t)).
+    + apply (IHphi (x :: σ'')).
+      replace (term_lift _ _ _) with (term_lift 0 1 (term_lift 0 (length σ'') t)).
       { apply Hphi. }
 
       rewrite term_lift_0_lift_0.
       reflexivity.
 
-    + specialize (IHphi (x :: sigma'')).
+    + specialize (IHphi (x :: σ'')).
       rewrite term_lift_0_lift_0.
       apply IHphi.
       apply Hphi.

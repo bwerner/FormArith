@@ -10,9 +10,8 @@ From FormArith.SimplyTypedLambdaCalculus Require Import Term.
 
 (** ** Definitions *)
 
-(** *** 
-  Local confluence
-  
+(** *** Local confluence
+
   A rewrite rule → is said to be locally confluent if:
   ∀ t u v, t → u ∧ t → v ⇒ ∃ w, u → w ∧ v → w.
 *)
@@ -22,8 +21,7 @@ Definition local_confluence (P: term -> term -> Prop): Prop :=
     P t v ->
     exists (w : term), P u w /\ P v w.
 
-(** ***
-  Church-Rosser propery
+(** *** Church-Rosser propery
 
   It is defined as the local confluence for the reflexive and transitive
   closure of the rewrite rule.

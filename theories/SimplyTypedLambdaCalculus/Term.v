@@ -18,7 +18,7 @@ From Autosubst Require Export Autosubst.
   variables in the λ-abstractions.
 *)
 Inductive term : Type :=
-  (** *** Constructions of basic λ-calculus *)
+  (** **** Constructions of basic λ-calculus *)
 
   (**
     A simple variable.
@@ -33,7 +33,7 @@ Inductive term : Type :=
   (** λ-abstraction *)
   | Lam (s: {bind term})
 
-  (** *** Extension with pairs and projections *)
+  (** **** Extension with pairs and projections *)
 
   (** Pair of two terms *)
   | Pair (s t: term)
@@ -44,15 +44,15 @@ Inductive term : Type :=
   (** Right projection: π2 *)
   | ProjR (s: term)
 
-  (** *** Extension with injections and pattern matching *)
+  (** **** Extension with injections and pattern matching *)
 
-  (** ** Pattern matching on a term: δ *)
+  (** Pattern matching on a term: δ *)
   | Case (t: term) (u: {bind term}) (v: {bind term})
 
-  (** *** Left injection: i *)
+  (** Left injection: i *)
   | InjL (s: term)
 
-  (** *** Right injection: j *)
+  (** Right injection: j *)
   | InjR (s: term).
 
 (* Autosubst required magic *)
@@ -69,7 +69,7 @@ Reserved Notation "t ~> t'" (at level 60).
 
 (** *** Rules of the β-reduction for the simply-typed λ-calculus. *)
 Inductive beta: term -> term -> Prop :=
-  (** *** Classical beta reduction *)
+  (** **** Classical beta reduction *)
 
   (**
     Substitution rule.
@@ -87,7 +87,7 @@ Inductive beta: term -> term -> Prop :=
   (** Reduction under a [Lam] *)
   | Beta_Lam (s s': term): s ~> s' -> Lam s ~> Lam s'
 
-  (** *** Pairs and projections *)
+  (** **** Pairs and projections *)
 
   (** Reduction in the left part of a [Pair] *)
   | Beta_Pair1 (s s' t: term): s ~> s' -> Pair s t ~> Pair s' t
@@ -107,7 +107,7 @@ Inductive beta: term -> term -> Prop :=
   (** Reduction of a [Pair] in a right projection *)
   | Beta_ProjR_Pair (s t: term): ProjR (Pair s t) ~> t
 
-  (** *** Injections and pattern matching *)
+  (** **** Injections and pattern matching *)
   
   (** Reduction in the matched part of a [Case] *)
   | Beta_Case1 (t t' u v: term): t ~> t' -> Case t u v ~> Case t' u v

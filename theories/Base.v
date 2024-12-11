@@ -1,5 +1,5 @@
 (**
-  This project contains formalisation in Coq of the 2.7.1 MPRI course:
+  This project contains formalisation in Rocq of the 2.7.1 MPRI course:
   Foundations of proof systems.
 *)
 
