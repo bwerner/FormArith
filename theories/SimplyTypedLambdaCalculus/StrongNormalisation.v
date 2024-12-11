@@ -1,10 +1,31 @@
+(**
+  This file contains a complete proof a the strong normalisation of the
+  simply-typed λ-calculus.
+*)
+
 From FormArith.SimplyTypedLambdaCalculus Require Import Term Typing.
 
+(** * Strong normalisation of the simply-typed λ-calculus *)
 
+(** ** Definitions *)
+
+(** *** Strong normalisation
+
+  Intuitively, a [term] is strongly normalising if all of its successor for the
+  β-reduction are also strongly normalising.
+
+  This definition is equivalent but easier to deal with in Coq than the usual
+  definition "There is no infinite path starting with this term".
+*)
 Inductive SN: term -> Prop :=
   | Strong (t: term) :
       (forall (t': term), t ~> t' -> SN t') -> SN t.
 
+(** *** Reducibility
+
+  Creates a proof of the strong normalisation of a term [t] based on the shape
+  of its type [A].
+*)
 Fixpoint reducible (A: type) (t: term): Prop :=
   match A with
   | Base => SN t
@@ -16,26 +37,59 @@ Fixpoint reducible (A: type) (t: term): Prop :=
       (forall v, t ~>* InjR v -> reducible B v)
   end.
 
+(** *** Neutral terms
+
+  A term is said to be "neutral" if it can be reduced.
+*)
 Definition neutral (t: term): Prop :=
   match t with
   | Lam _ | Pair _ _ | InjL _ | InjR _ => False
   | _ => True
   end.
 
+(** *** Direct sub-terms
+
+  [sub_term t1 t2] holds if and only if [t1] is a direct sub-term of [t2].
+*)
 Inductive sub_term: term -> term -> Prop :=
+  (** t1 is a sub-term of t1 t2 *)
   | Sub_App1 (t1 t2: term) : sub_term t1 (App t1 t2)
+  
+  (** t2 is a sub-term of t1 t2 *)
   | Sub_App2 (t1 t2: term) : sub_term t2 (App t1 t2)
+  
+  (** t is a sub-term of λ t *)
   | Sub_Lam (t: term) : sub_term t (Lam t)
+  
+  (** t1 is a sub-term of (t1, t2) *)
   | Sub_Pair1 (t1 t2: term): sub_term t1 (Pair t1 t2)
+  
+  (** t2 is a sub-term of (t1, t2) *)
   | Sub_Pair2 (t1 t2: term): sub_term t2 (Pair t1 t2)
+  
+  (** t is a sub-term of π1(t) *)
   | Sub_ProjL (t: term): sub_term t (ProjL t)
+  
+  (** t is a sub-term of π2(t) *)
   | Sub_ProjR (t: term): sub_term t (ProjR t)
+  
+  (** t1 is a sub-term of δ(t1, t2, t3) *)
   | Sub_Case1 (t1 t2 t3: term): sub_term t1 (Case t1 t2 t3)
+  
+  (** t2 is a sub-term of δ(t1, t2, t3) *)
   | Sub_Case2 (t1 t2 t3: term): sub_term t2 (Case t1 t2 t3)
+  
+  (** t3 is a sub-term of δ(t1, t2, t3) *)
   | Sub_Case3 (t1 t2 t3: term): sub_term t3 (Case t1 t2 t3)
+  
+  (** t is a sub-term of i(t) *)
   | Sub_InjL (t: term): sub_term t (InjL t)
+  
+  (** t is a sub-term of j(t) *)
   | Sub_InjR (t: term): sub_term t (InjR t).
 
+
+(** ** Properties *)
 
 Lemma SN_lam (t: term):
   SN t -> SN (Lam t).
@@ -48,6 +102,10 @@ Proof.
   now apply H.
 Qed.
 
+(**
+  If a term is strongly normalising, then all of its direct sub-terms are
+  strongly normalising.
+*)
 Lemma SN_sub_term (t: term):
   SN t -> forall (t': term), sub_term t' t -> SN t'.
 Proof.
@@ -60,7 +118,7 @@ Proof.
        | H: _ |- _ => idtac
        end.
 
-  (** Classical Lambda calculus *)
+  (** Classical λ-calculus *)
   - apply IH with (App u t2).
     + now apply Beta_AppL.
     + apply Sub_App1.
@@ -126,6 +184,15 @@ Proof.
   now inversion 1.
 Qed.
 
+(**
+  Links between reducibility, neutrality and strong normalisation:
+
+  - every reducible term is strongly normalising
+  - if t is reducible with type A, and if t → u, then u is reducible with
+    type A
+  - if t is neutral and every term into which t can be β-reduced is reducible
+    with type A, then t is reducible with type A.
+*)
 Lemma reducible_is_SN (A : type):
   (forall (t: term), reducible A t -> SN t) /\
     (forall (t u: term), reducible A t -> t ~> u -> reducible A u) /\
@@ -221,6 +288,7 @@ Proof.
       all: now apply clos_rt_rt1n_iff.
 Qed.
 
+(** Strongly normalising is closed under substitutions. *)
 Lemma SN_subst (t: term) (σ: var -> term):
   SN t -> forall (u: term), t = u.[σ] -> SN u.
 Proof.
@@ -231,6 +299,7 @@ Proof.
   - reflexivity.
 Qed.
 
+(** Double induction principle on terms. *)
 Lemma SN_ind_pair (P : term -> term -> Prop):
   (forall t u, (forall t' u', ((t = t' /\ u ~> u') \/ (t ~> t' /\ u = u')) -> P t' u') -> P t u) ->
     forall t u, SN t -> SN u -> P t u.
@@ -250,6 +319,7 @@ Proof.
     now apply Strong.
 Qed.
 
+(** Triple induction principle on terms. *)
 Lemma SN_triple_ind (P : term -> term -> term -> Prop):
   (forall t u v,
     (forall t' u' v',
@@ -437,7 +507,7 @@ Proof.
     + now apply clos_rt_rt1n_iff.
 Qed.
 
-Lemma reducible_pat (A B C: type) (t u v: term):
+Lemma reducible_case (A B C: type) (t u v: term):
   reducible (Sum A B) t ->
   reducible (Arr A C) (Lam u) ->
   reducible (Arr B C) (Lam v) ->
@@ -503,6 +573,11 @@ Proof.
     now apply Beta_Subst.
 Qed.
 
+(**
+  Conclusion of previous lemmas: if Γ and σ are such that for every variable
+  x in Γ, σ(x) is reducible with type Γ(x), then Γ ⊢ t : A implies that t[σ] is
+  reducible with type A.
+*)
 Lemma typing_is_reducible (Γ: var -> type) (σ: var -> term):
   (forall (x: var), reducible (Γ x) (σ x)) ->
     forall (A: type) (t: term), Γ ⊢ t : A -> reducible A t.[σ].
@@ -532,7 +607,7 @@ Proof.
   - apply (IHt σ (Prod A0 A) Γ Hred H1).
 
   - simpl.
-    apply reducible_pat with A0 B.
+    apply reducible_case with A0 B.
     + now apply IHt with Γ.
     + apply reducible_abs.
       intros; asimpl.
@@ -552,6 +627,12 @@ Proof.
     now apply IHt with Γ.
 Qed.
 
+(**
+  Strong normalisation of simply-typed λ-calculus: all typable terms are
+  strongly normalising.
+
+  This is a direct consequence of the previous lemma [typing_is_reducible].
+*)
 Corollary STLC_is_SN (A: type) (Γ: var -> type) (t: term):
   Γ ⊢ t : A -> SN t.
 Proof.

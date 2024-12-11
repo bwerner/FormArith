@@ -1,59 +1,90 @@
+(**
+  This file defines derivations in the first-order logic with some weakening properties.
+*)
+
 From FormArith.FirstOrderLogic Require Import Definitions Lifts.
 
 Require Import Lia.
 
+(** * Derivations *)
 
+(** ** Rules of the first-order logic
+
+  [Derivable Γ φ] should be read as "The formula ϕ is derivable under the
+  context Γ".
+*)
 Inductive Derivable: list formula -> formula -> Type :=
+  (** A ∈ Γ ⇒ Γ ⊢ A *)
   | RAxiom (gamma: list formula) (idx: nat):
       Derivable gamma (nth idx gamma FTop)
 
+  (** Γ ⊢ ⊤ *)
   | RTop_i (gamma: list formula):
       Derivable gamma FTop
 
+  (** Γ ⊢ ⊥ ⇒ Γ ⊢ A  *)
   | RBot_e (gamma: list formula) (phi: formula):
       Derivable gamma FBot -> Derivable gamma phi
 
+  (** Γ, φ ⊢ ψ ⇒ Γ ⊢ φ → ψ *)
   | RImp_i (gamma: list formula) (phi phi': formula):
       Derivable (phi :: gamma) phi' -> Derivable gamma (FImp phi phi')
 
+  (** (Γ ⊢ φ) ∧ (Γ ⊢ φ) → ψ ⇒ Γ ⊢ ψ *)
   | RImp_e (gamma: list formula) (phi phi': formula):
       Derivable gamma phi -> Derivable gamma (FImp phi phi') -> Derivable gamma phi'
 
+  (** (Γ ⊢ φ) ∧ (Γ ⊢ ψ) ⇒ Γ ⊢ φ ∧ ψ *)
   | RConj_i (gamma: list formula) (phi phi': formula):
       Derivable gamma phi -> Derivable gamma phi' -> Derivable gamma (FConj phi phi')
 
+  (** Γ ⊢ φ ∧ ψ ⇒ Γ ⊢ φ *)
   | RConj_e1 (gamma: list formula) (phi phi': formula):
       Derivable gamma (FConj phi phi') -> Derivable gamma phi
 
+  (** Γ ⊢ φ ∧ ψ ⇒ Γ ⊢ ψ *)
   | RConj_e2 (gamma: list formula) (phi phi': formula):
       Derivable gamma (FConj phi phi') -> Derivable gamma phi'
 
+  (** Γ ⊢ φ ⇒ Γ ⊢ φ ∨ ψ *)
   | RDisj_i1 (gamma: list formula) (phi phi': formula):
       Derivable gamma phi -> Derivable gamma (FDisj phi phi')
 
+  (** Γ ⊢ ψ ⇒ Γ ⊢ φ ∨ ψ *)
   | RDisj_i2 (gamma: list formula) (phi phi': formula):
       Derivable gamma phi' -> Derivable gamma (FDisj phi phi')
 
+  (** (Γ ⊢ φ ∨ ψ) ∧ (Γ, φ ⊢ θ) ∧ (Γ, ψ ⊢ θ) ⇒ Γ ⊢ θ*)
   | RDisj_e (gamma: list formula) (phi phi' phi'': formula):
       Derivable gamma (FDisj phi phi') ->
       Derivable (phi :: gamma) phi'' -> Derivable (phi' :: gamma) phi'' ->
       Derivable gamma phi''
 
+  (** ⇑Γ ⊢ φ ⇒ Γ ⊢ ∀ φ *)
   | RForAll_i (gamma: list formula) (phi: formula):
       Derivable (context_lift 0 1 gamma) phi -> Derivable gamma (FForAll phi)
 
+  (** Γ ⊢ ∀ φ ⇒ Γ ⊢ φ[[0 ← t]] *)
   | RForAll_e (gamma: list formula) (phi: formula) (t: term):
       Derivable gamma (FForAll phi) -> Derivable gamma (formula_subst 0 t phi)
 
+  (** Γ ⊢ φ[[0 ← t]] ⇒ Γ ⊢ ∃ φ *)
   | RExists_i (gamma: list formula) (phi: formula) (t: term):
       Derivable gamma (formula_subst 0 t phi) -> Derivable gamma (FExists phi)
 
+  (** (Γ ⊢ ∃ φ) ∧ (⇑Γ, φ ⊢ ⇑ψ) ⇒ Γ ⊢ ψ *)
   | RExists_e (gamma: list formula) (phi phi': formula):
       Derivable gamma (FExists phi) ->
       Derivable (phi :: context_lift 0 1 gamma) (formula_lift 0 1 phi') ->
       Derivable gamma phi'.
 
 
+(** ** Correction *)
+
+(**
+  This lemma states that if Γ ⊢ φ in our representation of the first-order
+  logic, then it also holds in Coq [Prop].
+*)
 Lemma derivable_correctness (fcts: nat -> list nat -> nat) (preds: nat -> list nat -> Prop)
     (gamma: list formula) (phi: formula):
   Derivable gamma phi ->
@@ -155,7 +186,20 @@ Proof.
     apply IHtree.
 Qed.
 
+(** ** Weakening lemmas  *)
 
+(** Small auxiliary lemma to prove [derivable_weak']. *)
+Lemma app_cons_nil {T: Type} (l l': list T) (x: T):
+  (l ++ x :: nil) ++ l' = l ++ x :: l'.
+Proof.
+  induction l as [| ? ? IHl ]; simpl.
+  { reflexivity. }
+
+  rewrite IHl.
+  reflexivity.
+Qed.
+
+(** (Γ ⊢ φ) ∧ (Γ = Γ', Γ'') ⇒ Γ', ψ, Γ'' ⊢ φ *)
 Lemma derivable_weak' (gamma: list formula) (phi: formula):
   Derivable gamma phi ->
     forall (gamma' gamma'': list formula) (phi': formula),
@@ -277,6 +321,7 @@ Proof.
       reflexivity.
 Defined.
 
+(** Γ, Γ' ⊢ φ ⇒ Γ, ψ, Γ' ⊢ φ *)
 Lemma derivable_weak (gamma gamma': list formula) (phi phi': formula):
   Derivable (gamma ++ gamma') phi -> Derivable (gamma ++ phi' :: gamma') phi.
 Proof.
@@ -286,6 +331,7 @@ Proof.
   - reflexivity.
 Defined.
 
+(** Γ ⊢ φ ⇒ Γ, Γ' ⇒ φ *)
 Lemma derivable_weak_gamma (gamma gamma': list formula) (phi: formula):
   Derivable gamma phi -> Derivable (gamma' ++ gamma) phi.
 Proof.
@@ -296,12 +342,12 @@ Proof.
   assumption.
 Defined.
 
+(** Γ ⊢ φ ⇒ ψ, Γ ⇒ φ *)
 Lemma derivable_weak_phi (gamma: list formula) (phi phi': formula):
   Derivable gamma phi -> Derivable (phi' :: gamma) phi.
 Proof.
   apply (derivable_weak nil).
 Defined.
-
 
 Lemma derivable_lift (gamma: list formula) (phi: formula):
   Derivable gamma phi ->
@@ -389,6 +435,7 @@ Proof.
       apply IHind2.
 Defined.
 
+(** (Γ ⊢ φ) ∧ (Γ = Γ', ψ, Γ'') ∧ (Γ'' ⊢ ψ) ⇒ Γ', Γ'' ⊢ φ *)
 Lemma derivable_subst' (gamma: list formula) (phi: formula):
   Derivable gamma phi ->
     forall (phi': formula) (gamma' gamma'': list formula),
@@ -520,6 +567,7 @@ Proof.
     apply Hphi''.
 Defined.
 
+(** (Γ, ψ, Γ' ⊢ φ) ∧ (Γ ⊢ ψ) ⇒ Γ, Γ' ⊢ φ *)
 Lemma derivable_subst (gamma gamma': list formula) (phi phi': formula):
   Derivable (gamma' ++ phi' :: gamma) phi ->
     Derivable gamma phi' -> Derivable (gamma' ++ gamma) phi.
