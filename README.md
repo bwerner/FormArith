@@ -1,4 +1,4 @@
-# MPRI's 2.7.1 course
+# MPRI's PRFSYS course
 
 ## Setup
 
