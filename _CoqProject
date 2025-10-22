@@ -1,1 +1,3 @@
--Q _build/default/theories/ FormArith
+-Q theories FormArith
+
+theories

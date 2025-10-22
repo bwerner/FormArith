@@ -42,20 +42,20 @@ We assume that you have `opam` installed on your system. Setup instructions can 
 1. Create a new `opam` switch for this project:
 
 ```bash
-opam switch create <name> --packages=ocaml-variants.4.14.2+options,ocaml-option-flambda
+opam switch create <name> 4.14.2
 opam switch <name>
 ```
 
 2. Install the necessary dependencies:
 
 ```bash
-opam pin add coq 8.19.2
 opam repo add coq-released https://coq.inria.fr/opam/released
+opam install . --deps-only
 ```
 
 3. Build the Rocq implementation:
 
 ```bash
-dune build
+make
 ```
 
