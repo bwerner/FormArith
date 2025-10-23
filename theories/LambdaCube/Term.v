@@ -6,6 +6,11 @@ Inductive sort : Type :=
 | Star : sort
 | Box : sort.
 
+(* Terms of the Lambda Cube with n free variables.
+   Variables are represented as De Bruijn levels.
+   The free variable most recently introduced in
+   a term with (n + 1) free variables has value n
+ *)
 Inductive term (n : nat) : Type :=
 | Var : {k | k < n} → term n
 | Pi : term n → term (S n) → term n
@@ -19,6 +24,7 @@ Arguments Abs {n}.
 Arguments App {n}.
 Arguments Srt {n}.
 
+(* Execution contexts of the Lambda Cube with n free variables. *)
 Inductive ctx (n : nat) : Type :=
 | Hole : ctx n
 | PiL : ctx n → term (S n) → ctx n
@@ -46,9 +52,11 @@ Proof.
   apply le_unique.
 Qed.
 
+(* Basic weakening renaming *)
 Definition weaken {k : nat} (i : {i | i < k}) : {i | i < S k} :=
   exist _ (proj1_sig i) (Nat.lt_lt_succ_r _ _ (proj2_sig i)).
 
+(* Lifting of variable renamings *)
 Definition lift
   {k n : nat} (σ : {i | i < k} → {i | i < n})
   (i : {i | i < S k}) : {i | i < S n}
@@ -147,6 +155,7 @@ Fixpoint renK {k n : nat} (σ : {i | i < k} → {i | i < n}) (K : ctx k) : ctx n
   | AppR tm1 K => AppR (ren σ tm1) (renK σ K)
   end.
 
+(* Plug a term in place of the hole in a context *)
 Fixpoint fill {n : nat} (K : ctx n) (t : term n) : term n :=
   match K with
   | Hole => t
@@ -212,7 +221,8 @@ Proof.
     intros i;
     apply lift_weaken.
 Qed.
-  
+
+(* Lifting of variable substitutions *)
 Definition lift_bind {k n : nat} (σ : {i | i < k} → term n) (i : {i | i < S k}) : term (S n) :=
   match lt_dec (proj1_sig i) k with
   | left Hi => ren weaken (σ (exist _ (proj1_sig i) Hi))
@@ -248,6 +258,7 @@ Proof.
   - reflexivity.
 Qed.
 
+(* Substitution of free variables inside a term *)
 Fixpoint bind {k n : nat} (σ : {i | i < k} → term n) (t : term k) : term n
   :=
   match t with
@@ -258,6 +269,7 @@ Fixpoint bind {k n : nat} (σ : {i | i < k} → term n) (t : term k) : term n
   | Srt s => Srt s
   end.
 
+(* Substitution of free variables inside a context *)
 Fixpoint bindK {k n : nat} (σ : {i | i < k} → term n) (K : ctx k) : ctx n :=
   match K with
   | Hole => Hole
@@ -277,8 +289,6 @@ Lemma lift_bind_comp :
   bind (lift_bind σ2) (lift_bind σ1 i) = lift_bind (bind σ2 ∘ σ1) i.
 Proof.
 Abort.
-
-
 
 Lemma bind_ext :
   ∀ {k n : nat}
@@ -321,7 +331,8 @@ Lemma bind_fill :
   bind σ (fill K t) = fill (bindK σ K) (bind σ t).
 Proof.
 Abort.
-  
+
+(* Basic substitution capturing the free variable introduced last *)
 Definition bind_first {k : nat} (t : term k) (i : {i | i < S k}) : term k
   :=
   match lt_dec (proj1_sig i) k with
