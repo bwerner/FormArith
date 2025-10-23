@@ -312,31 +312,16 @@ Proof.
     f_equal;
     apply bind_ext;
     intros i.
-    apply lift_comp.
-  now rewrite !IH.
-Qed.
+Abort.
 
-Lemma ren_fill :
+Lemma bind_fill :
   ∀ {k n : nat}
-  (σ : {i | i < k} → {i | i < n})
+  (σ : {i | i < k} → term n)
   (K : ctx k) (t : term k),
-  ren σ (fill K t) = fill (renK σ K) (ren σ t).
+  bind σ (fill K t) = fill (bindK σ K) (bind σ t).
 Proof.
-  fix IH 4.
-  intros k n σ K t.
-  destruct K; simpl; try congruence.
-  all:
-    f_equal;
-    rewrite IH;
-    f_equal;
-    rewrite !ren_comp;
-    apply ren_ext;
-    intros i;
-    apply lift_weaken.
-Qed.
+Abort.
   
-
-
 Definition bind_first {k : nat} (t : term k) (i : {i | i < S k}) : term k
   :=
   match lt_dec (proj1_sig i) k with
