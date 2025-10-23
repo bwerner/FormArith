@@ -1,5 +1,6 @@
 From Coq Require Import Utf8.
 From Coq Require Import Arith Lia.
+From FormArith Require Import Base.
 
 Inductive sort : Type :=
 | Star : sort
@@ -10,14 +11,40 @@ Inductive term (n : nat) : Type :=
 | Pi : term n → term (S n) → term n
 | Abs : term n → term (S n) → term n
 | App : term n → term n → term n
-| Srt : sort → term n
-.
+| Srt : sort → term n.
 
 Arguments Var {n}.
 Arguments Pi {n}.
 Arguments Abs {n}.
 Arguments App {n}.
 Arguments Srt {n}.
+
+Inductive ctx (n : nat) : Type :=
+| Hole : ctx n
+| PiL : ctx n → term (S n) → ctx n
+| AbsL : ctx n → term (S n) → ctx n
+| AppL : ctx n → term n → ctx n
+| PiR : term n → ctx (S n) → ctx n
+| AbsR : term n → ctx (S n) → ctx n
+| AppR : term n → ctx n → ctx n.
+
+Arguments Hole {n}.
+Arguments PiL {n}.
+Arguments AbsL {n}.
+Arguments AppL {n}.
+Arguments PiR {n}.
+Arguments AbsR {n}.
+Arguments AppR {n}.            
+
+Lemma sig_lt_ext {k : nat} (p q : {i | i < k}) :
+  proj1_sig p = proj1_sig q → p = q.
+Proof.
+  destruct p, q.
+  simpl.
+  intros ->.
+  f_equal.
+  apply le_unique.
+Qed.
 
 Definition weaken {k : nat} (i : {i | i < k}) : {i | i < S k} :=
   exist _ (proj1_sig i) (Nat.lt_lt_succ_r _ _ (proj2_sig i)).
@@ -31,14 +58,51 @@ Definition lift
   | right _ => exist _ n (Nat.lt_succ_diag_r n)
   end.
 
-Lemma sig_lt_ext {k : nat} (p q : {i | i < k}) :
-  proj1_sig p = proj1_sig q → p = q.
+Lemma lift_weaken
+  {k n : nat}
+  (σ : {i | i < k} → {i | i < n})
+  (i :  {i | i < k}) :
+  lift σ (weaken i) = weaken (σ i).
 Proof.
-  destruct p, q.
-  simpl.
-  intros ->.
-  f_equal.
-  apply le_unique.
+  unfold lift.
+  destruct (lt_dec _ _) as [|Hge].
+  - do 2 f_equal.
+    now apply sig_lt_ext.
+  - contradict Hge.
+    simpl.
+    apply proj2_sig.
+Qed.
+
+Lemma lift_ext
+  {k n : nat}
+  (σ1 σ2: {i | i < k} → {i | i < n}) :
+  (∀ i, σ1 i = σ2 i) →
+  ∀ (i : {i | i < S k}),
+  lift σ1 i = lift σ2 i.
+Proof.
+  intros σ_eq i.
+  unfold lift.
+  destruct (lt_dec (proj1_sig i) k).
+  - congruence.
+  - reflexivity.
+Qed.
+
+Lemma lift_comp :
+  ∀ {k m n : nat}
+  (σ1 : {i | i < k} → {i | i < m})
+  (σ2 : {i | i < m} → {i | i < n})
+  (i : {i | i < S k}),
+  lift σ2 (lift σ1 i) = lift (σ2 ∘ σ1) i.
+Proof.
+  intros k m n σ1 σ2 i.
+  unfold lift.
+  destruct (lt_dec (proj1_sig i) k);
+    destruct (lt_dec _ _) as [Hlt | Hge]; simpl in *; try lia.
+  - do 2 f_equal.
+    now apply sig_lt_ext.
+  - contradict Hge.
+    apply proj2_sig.
+  - reflexivity.
 Qed.
 
 Lemma lift_lt {k n : nat} (σ : {i | i < k} → {i | i < n}) (i : nat)
@@ -61,21 +125,129 @@ Proof.
   destruct (lt_dec _ _); simpl in *; [lia|reflexivity].
 Qed.
 
-Fixpoint subst {k n : nat} (σ : {i | i < k} → {i | i < n}) (t : term k) : term n :=
+(* Renaming of free variables in a term *)
+Fixpoint ren {k n : nat} (σ : {i | i < k} → {i | i < n}) (t : term k) : term n :=
   match t with
   | Var i => Var (σ i)
-  | Pi ty fam => Pi (subst σ ty) (subst (lift σ) fam)
-  | Abs ty tm => Abs (subst σ ty) (subst (lift σ) tm)
-  | App tm1 tm2 => App (subst σ tm1) (subst σ tm2)
+  | Pi ty fam => Pi (ren σ ty) (ren (lift σ) fam)
+  | Abs ty tm => Abs (ren σ ty) (ren (lift σ) tm)
+  | App tm1 tm2 => App (ren σ tm1) (ren σ tm2)
   | Srt s => Srt s
   end.
 
+(* Renaming of free variables in a context *)
+Fixpoint renK {k n : nat} (σ : {i | i < k} → {i | i < n}) (K : ctx k) : ctx n :=
+  match K with
+  | Hole => Hole
+  | PiL K fam => PiL (renK σ K) (ren (lift σ) fam)
+  | AbsL K tm => AbsL (renK σ K) (ren (lift σ) tm)
+  | AppL K tm2 => AppL (renK σ K) (ren σ tm2)
+  | PiR ty K => PiR (ren σ ty) (renK (lift σ) K)
+  | AbsR ty K => AbsR (ren σ ty) (renK (lift σ) K)
+  | AppR tm1 K => AppR (ren σ tm1) (renK σ K)
+  end.
+
+Fixpoint fill {n : nat} (K : ctx n) (t : term n) : term n :=
+  match K with
+  | Hole => t
+  | PiL K fam => Pi (fill K t) fam
+  | AbsL K tm => Abs (fill K t) tm
+  | AppL K tm => App (fill K t) tm
+  | PiR ty K => Pi ty (fill K (ren weaken t))
+  | AbsR ty K => Abs ty (fill K (ren weaken t))
+  | AppR tm K => App tm (fill K t)
+  end.
+
+Lemma ren_ext :
+  ∀ {k n : nat}
+  (σ1 σ2: {i | i < k} → {i | i < n})
+  (t : term k),
+  (∀ i, σ1 i = σ2 i) →
+  ren σ1 t = ren σ2 t.
+Proof.
+  fix IH 5.
+  intros k n σ1 σ2 t σ_eq.
+  destruct t;
+    simpl;
+    try congruence;
+    f_equal;
+    try now apply IH.
+  all : apply IH, lift_ext, σ_eq.
+Qed.
+
+Lemma ren_comp :
+  ∀ {k m n : nat}
+  (σ1 : {i | i < k} → {i | i < m})
+  (σ2 : {i | i < m} → {i | i < n})
+  (t : term k),
+  ren σ2 (ren σ1 t) = ren (σ2 ∘ σ1) t.
+Proof.
+  fix IH 6.
+  intros k m n σ1 σ2 t.
+  destruct t; simpl; try easy.
+  1,2 :
+    rewrite !IH;
+    f_equal;
+    apply ren_ext;
+    intros i;
+    apply lift_comp.
+  now rewrite !IH.
+Qed.
+
+Lemma ren_fill :
+  ∀ {k n : nat}
+  (σ : {i | i < k} → {i | i < n})
+  (K : ctx k) (t : term k),
+  ren σ (fill K t) = fill (renK σ K) (ren σ t).
+Proof.
+  fix IH 4.
+  intros k n σ K t.
+  destruct K; simpl; try congruence.
+  all:
+    f_equal;
+    rewrite IH;
+    f_equal;
+    rewrite !ren_comp;
+    apply ren_ext;
+    intros i;
+    apply lift_weaken.
+Qed.
+  
 Definition lift_bind {k n : nat} (σ : {i | i < k} → term n) (i : {i | i < S k}) : term (S n) :=
   match lt_dec (proj1_sig i) k with
-  | left Hi => subst weaken (σ (exist _ (proj1_sig i) Hi))
+  | left Hi => ren weaken (σ (exist _ (proj1_sig i) Hi))
   | right _ => Var (exist _ n (Nat.lt_succ_diag_r n))
   end.
- 
+
+Lemma lift_bind_weaken
+  {k n : nat}
+  (σ : {i | i < k} → term n)
+  (i :  {i | i < k}) :
+  lift_bind σ (weaken i) = ren weaken (σ i).
+Proof.
+  unfold lift_bind.
+  destruct (lt_dec _ _) as [|Hge].
+  - do 2 f_equal.
+    now apply sig_lt_ext.
+  - contradict Hge.
+    simpl.
+    apply proj2_sig.
+Qed.
+
+Lemma lift_bind_ext
+  {k n : nat}
+  (σ1 σ2: {i | i < k} → term n) :
+  (∀ i, σ1 i = σ2 i) →
+  ∀ (i : {i | i < S k}),
+  lift_bind σ1 i = lift_bind σ2 i.
+Proof.
+  intros σ_eq i.
+  unfold lift_bind.
+  destruct (lt_dec (proj1_sig i) k).
+  - congruence.
+  - reflexivity.
+Qed.
+
 Fixpoint bind {k n : nat} (σ : {i | i < k} → term n) (t : term k) : term n
   :=
   match t with
@@ -86,24 +258,88 @@ Fixpoint bind {k n : nat} (σ : {i | i < k} → term n) (t : term k) : term n
   | Srt s => Srt s
   end.
 
+Fixpoint bindK {k n : nat} (σ : {i | i < k} → term n) (K : ctx k) : ctx n :=
+  match K with
+  | Hole => Hole
+  | PiL K fam => PiL (bindK σ K) (bind (lift_bind σ) fam)
+  | AbsL K tm => AbsL (bindK σ K) (bind (lift_bind σ) tm)
+  | AppL K tm2 => AppL (bindK σ K) (bind σ tm2)
+  | PiR ty K => PiR (bind σ ty) (bindK (lift_bind σ) K)
+  | AbsR ty K => AbsR (bind σ ty) (bindK (lift_bind σ) K)
+  | AppR tm1 K => AppR (bind σ tm1) (bindK σ K)
+  end.
+
+Lemma lift_bind_comp :
+  ∀ {k m n : nat}
+  (σ1 : {i | i < k} → term m)
+  (σ2 : {i | i < m} → term n)
+  (i : {i | i < S k}),
+  bind (lift_bind σ2) (lift_bind σ1 i) = lift_bind (bind σ2 ∘ σ1) i.
+Proof.
+Abort.
+
+
+
+Lemma bind_ext :
+  ∀ {k n : nat}
+  (σ1 σ2: {i | i < k} → term n)
+  (t : term k),
+  (∀ i, σ1 i = σ2 i) →
+  bind σ1 t = bind σ2 t.
+Proof.
+  fix IH 5.
+  intros k n σ1 σ2 t σ_eq.
+  destruct t;
+    simpl;
+    try congruence;
+    f_equal;
+    try now apply IH.
+  all : apply IH, lift_bind_ext, σ_eq.
+Qed.
+
+Lemma bind_comp :
+  ∀ {k m n : nat}
+  (σ1 : {i | i < k} → term m)
+  (σ2 : {i | i < m} → term n)
+  (t : term k),
+  bind σ2 (bind σ1 t) = bind (bind σ2 ∘ σ1) t.
+Proof.
+  fix IH 6.
+  intros k m n σ1 σ2 t.
+  destruct t; simpl; try reflexivity.
+  1,2 :
+    rewrite !IH;
+    f_equal;
+    apply bind_ext;
+    intros i.
+    apply lift_comp.
+  now rewrite !IH.
+Qed.
+
+Lemma ren_fill :
+  ∀ {k n : nat}
+  (σ : {i | i < k} → {i | i < n})
+  (K : ctx k) (t : term k),
+  ren σ (fill K t) = fill (renK σ K) (ren σ t).
+Proof.
+  fix IH 4.
+  intros k n σ K t.
+  destruct K; simpl; try congruence.
+  all:
+    f_equal;
+    rewrite IH;
+    f_equal;
+    rewrite !ren_comp;
+    apply ren_ext;
+    intros i;
+    apply lift_weaken.
+Qed.
+  
+
+
 Definition bind_first {k : nat} (t : term k) (i : {i | i < S k}) : term k
   :=
   match lt_dec (proj1_sig i) k with
   | left Hi => Var (exist _ (proj1_sig i) Hi)
   | right _ => t
   end.
-
-Inductive conv {n : nat} : term n → term n → Prop :=
-| conv_var (k : {k | k < n}) : conv (Var k) (Var k)
-| conv_srt (s : sort) : conv (Srt s) (Srt s)
-| conv_pi (A1 A2 : term n) (B1 B2 : term (S n)) :
-  conv A1 A2 → conv B1 B2 → conv (Pi A1 B1) (Pi A2 B2)
-| conv_abs (A1 A2 : term n) (B1 B2 : term (S n)) :
-  conv A1 A2 → conv B1 B2 → conv (Abs A1 B1) (Abs A2 B2)
-| conv_app (A1 A2 B1 B2 : term n) :
-  conv A1 A2 → conv B1 B2 → conv (App A1 B1) (App A2 B2)
-| conv_redex_l (A1 A2 A3 : term n) (B : term (S n)) :
-  conv (bind (bind_first A2) B) A3 → conv (App (Abs A1 B) A2) A3
-| conv_redex_r (A1 A2 A3 : term n) (B : term (S n)) :
-  conv A3 (bind (bind_first A2) B) → conv A3 (App (Abs A1 B) A2)
-.

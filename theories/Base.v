@@ -5,6 +5,7 @@
 
 Require Export Nat.
 Require Export Relations.Relations.
+From Coq Require Export Utf8.
 
 (** Force all the proof to have only one goal at a time. *)
 #[export] Set Default Goal Selector "!".
@@ -12,6 +13,12 @@ Require Export Relations.Relations.
 (** The star defines the reflexive and transitive closure of a relation. *)
 Notation "R *" := (clos_refl_trans _ R)
   (at level 8, no associativity, format "R *").
+
+(** Composition of functions **)
+
+Notation "g ∘ f" :=
+  (fun x => g (f x))
+    (at level 40, left associativity).
 
 Tactic Notation "inv" hyp(H) :=
   inversion H; subst; clear H.
