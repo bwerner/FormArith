@@ -460,7 +460,16 @@ Lemma bind_fill :
   (K : ctx k) (t : term k),
   bind σ (fill K t) = fill (bindK σ K) (bind σ t).
 Proof.
-Abort.
+  fix IH 4.
+  intros k n σ K t.
+  destruct K; simpl; try congruence.
+  all: rewrite IH;
+    do 2 f_equal;
+    rewrite bind_ren,
+       ren_bind;
+       apply bind_ext;
+       apply lift_bind_weaken.
+Qed.
 
 (* Basic substitution capturing the free variable introduced last *)
 Definition bind_first {k : nat} (t : term k) (i : {i | i < S k}) : term k
