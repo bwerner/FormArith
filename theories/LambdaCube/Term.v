@@ -281,15 +281,6 @@ Fixpoint bindK {k n : nat} (σ : {i | i < k} → term n) (K : ctx k) : ctx n :=
   | AppR tm1 K => AppR (bind σ tm1) (bindK σ K)
   end.
 
-Lemma lift_bind_comp :
-  ∀ {k m n : nat}
-  (σ1 : {i | i < k} → term m)
-  (σ2 : {i | i < m} → term n)
-  (i : {i | i < S k}),
-  bind (lift_bind σ2) (lift_bind σ1 i) = lift_bind (bind σ2 ∘ σ1) i.
-Proof.
-Abort.
-
 Lemma bind_ext :
   ∀ {k n : nat}
   (σ1 σ2: {i | i < k} → term n)
@@ -307,6 +298,143 @@ Proof.
   all : apply IH, lift_bind_ext, σ_eq.
 Qed.
 
+Lemma lift_bind_lift :
+  ∀ {k m n : nat}
+    (σ1 : {i | i < k} → {i | i < m})
+    (σ2 : {i | i < m} → term n)
+    (i : {i | i < S k}),
+  lift_bind σ2 (lift σ1 i) = lift_bind (σ2 ∘ σ1) i.
+Proof.
+  intros k m n σ1 σ2 i.
+  unfold lift at 1, lift_bind at 2.
+  destruct (lt_dec _ _).
+  - unfold lift_bind at 1.
+    destruct (lt_dec _ _) as [|Hge].
+    + do 2 f_equal.
+      now apply sig_lt_ext.
+    + contradict Hge.
+      simpl.
+      apply proj2_sig.
+  - unfold lift_bind at 1.
+    destruct (lt_dec _ _) as [Hlt|].
+    + simpl in Hlt. lia.
+    + reflexivity.
+Qed.
+
+Lemma bind_ren :
+  ∀ {k m n : nat}
+    (σ1 : {i | i < k} → {i | i < m})
+    (σ2 : {i | i < m} → term n)
+    (t : term k),
+  bind σ2 (ren σ1 t) = bind (σ2 ∘ σ1) t.
+Proof.
+  fix IH 6.
+  intros k m n σ1 σ2 t.
+  destruct t; simpl; try reflexivity.
+  1,2:
+    rewrite IH;
+    f_equal;
+    rewrite IH;
+    apply bind_ext;
+    intros i;
+    apply lift_bind_lift.
+  now rewrite !IH.
+Qed.
+
+Lemma lift_bind_ren :
+  ∀ {k m n : nat}
+    (σ1 : {i | i < k} → term m)
+    (σ2 : {i | i < m} → {i | i < n})
+    (i : {i : nat | i < S k}),
+    ren (lift σ2) (lift_bind σ1 i) =
+    lift_bind (ren σ2 ∘ σ1) i.
+Proof.
+  intros k m n σ1 σ2 i.
+  unfold lift_bind.
+  destruct (lt_dec _ _) as [|Hge].
+  + rewrite !ren_comp.
+    apply ren_ext, lift_weaken.
+  + simpl. f_equal.
+    apply sig_lt_ext.
+    simpl.
+    apply lift_eq.
+Qed.
+
+Lemma ren_bind :
+  ∀ {k m n : nat}
+    (σ1 : {i | i < k} → term m)
+    (σ2 : {i | i < m} → {i | i < n})
+    (t : term k),
+  ren σ2 (bind σ1 t) = bind (ren σ2 ∘ σ1) t.
+Proof.
+  fix IH 6.
+  intros k m n σ1 σ2 t.
+  destruct t; simpl; try reflexivity.
+  - rewrite IH.
+    f_equal.
+    rewrite IH.
+    apply bind_ext.
+    intros i.
+    apply lift_bind_ren.
+  - rewrite !IH.
+    f_equal.
+    apply bind_ext.
+    intros i.
+    apply lift_bind_ren.
+  - now rewrite !IH.
+Qed. 
+
+Lemma bind_weaken :
+  ∀ {k n : nat}
+    (σ : {i | i < k} → term n)
+    (t : term k),
+  bind (lift_bind σ) (ren weaken t) = ren weaken (bind σ t).
+Proof.
+  fix IH 4.
+  intros k n σ t.
+  destruct t; simpl.
+  - apply lift_bind_weaken.
+  - rewrite IH.
+    f_equal.
+    rewrite ren_bind, bind_ren.
+    apply bind_ext.
+    intros i.
+    rewrite lift_bind_ren, lift_bind_lift.
+    apply lift_bind_ext.
+    intros j.
+    apply lift_bind_weaken.
+  - rewrite IH.
+    f_equal.
+    rewrite ren_bind, bind_ren.
+    apply bind_ext.
+    intros i.
+    rewrite lift_bind_ren, lift_bind_lift.
+    apply lift_bind_ext.
+    intros j.
+    apply lift_bind_weaken.
+  - now rewrite !IH.
+  - reflexivity.
+Qed.
+
+Lemma lift_bind_comp :
+  ∀ {k m n : nat}
+  (σ1 : {i | i < k} → term m)
+  (σ2 : {i | i < m} → term n)
+  (i : {i | i < S k}),
+  bind (lift_bind σ2) (lift_bind σ1 i) = lift_bind (bind σ2 ∘ σ1) i.
+Proof.
+  intros k m n σ1 σ2 i.
+  unfold lift_bind at 2 3.
+  destruct (lt_dec _ _) as [Hge | Hlt].
+  - rewrite ren_bind, bind_ren.
+    apply bind_ext.
+    apply lift_bind_weaken.
+  - simpl.
+    unfold lift_bind.
+    destruct (lt_dec _ _) as [Hge | Hlt']; [simpl in Hge; lia|].
+    reflexivity.
+Qed.
+
 Lemma bind_comp :
   ∀ {k m n : nat}
   (σ1 : {i | i < k} → term m)
@@ -321,8 +449,10 @@ Proof.
     rewrite !IH;
     f_equal;
     apply bind_ext;
-    intros i.
-Abort.
+    intros i;
+    apply lift_bind_comp.
+  now rewrite !IH.
+Qed.
 
 Lemma bind_fill :
   ∀ {k n : nat}
