@@ -25,22 +25,22 @@ Arguments App {n}.
 Arguments Srt {n}.
 
 (* Execution contexts of the Lambda Cube with n free variables. *)
-Inductive ctx (n : nat) : Type :=
-| Hole : ctx n
-| PiL : ctx n → term (S n) → ctx n
-| AbsL : ctx n → term (S n) → ctx n
-| AppL : ctx n → term n → ctx n
-| PiR : term n → ctx (S n) → ctx n
-| AbsR : term n → ctx (S n) → ctx n
-| AppR : term n → ctx n → ctx n.
+Inductive ctx (n : nat) : nat -> Type :=
+| Hole : ctx n n
+| PiL k : ctx n k → term (S n) → ctx n k
+| AbsL k : ctx n k → term (S n) → ctx n k
+| AppL k : ctx n k → term n → ctx n k
+| PiR k : term n → ctx (S n) (S k) → ctx n (S k)
+| AbsR k : term n → ctx (S n) (S k) → ctx n (S k)
+| AppR k : term n → ctx n k → ctx n k.
 
 Arguments Hole {n}.
-Arguments PiL {n}.
-Arguments AbsL {n}.
-Arguments AppL {n}.
-Arguments PiR {n}.
-Arguments AbsR {n}.
-Arguments AppR {n}.            
+Arguments PiL {n k}.
+Arguments AbsL {n k}.
+Arguments AppL {n k}.
+Arguments PiR {n k}.
+Arguments AbsR {n k}.
+Arguments AppR {n k}.            
 
 Lemma sig_lt_ext {k : nat} (p q : {i | i < k}) :
   proj1_sig p = proj1_sig q → p = q.
@@ -50,6 +50,16 @@ Proof.
   intros ->.
   f_equal.
   apply le_unique.
+Qed.
+
+Lemma ctx_le n k : ctx n k -> n <= k.
+Proof.
+  induction 1; lia.
+Qed.
+
+Lemma not_ctx_S_0 {n} : ctx (S n) 0 -> False.
+Proof.
+  intro K. apply ctx_le in K. lia.
 Qed.
 
 (* Basic weakening renaming *)
@@ -143,28 +153,38 @@ Fixpoint ren {k n : nat} (σ : {i | i < k} → {i | i < n}) (t : term k) : term 
   | Srt s => Srt s
   end.
 
-(* Renaming of free variables in a context *)
-Fixpoint renK {k n : nat} (σ : {i | i < k} → {i | i < n}) (K : ctx k) : ctx n :=
-  match K with
-  | Hole => Hole
-  | PiL K fam => PiL (renK σ K) (ren (lift σ) fam)
-  | AbsL K tm => AbsL (renK σ K) (ren (lift σ) tm)
-  | AppL K tm2 => AppL (renK σ K) (ren σ tm2)
-  | PiR ty K => PiR (ren σ ty) (renK (lift σ) K)
-  | AbsR ty K => AbsR (ren σ ty) (renK (lift σ) K)
-  | AppR tm1 K => AppR (ren σ tm1) (renK σ K)
+(* Plug a term in place of the hole in a context *)
+Fixpoint fill {n k : nat} (K : ctx n k) : term k -> term n :=
+  match K in ctx _ k return term k -> term n with
+  | Hole => fun t => t
+  | PiL K fam => fun t => Pi (fill K t) fam
+  | AbsL K tm => fun t => Abs (fill K t) tm
+  | AppL K tm => fun t => App (fill K t) tm
+  | PiR ty K => fun t => Pi ty (fill K t)
+  | AbsR ty K => fun t => Abs ty (fill K t)
+  | AppR tm K => fun t => App tm (fill K t)
   end.
 
-(* Plug a term in place of the hole in a context *)
-Fixpoint fill {n : nat} (K : ctx n) (t : term n) : term n :=
-  match K with
-  | Hole => t
-  | PiL K fam => Pi (fill K t) fam
-  | AbsL K tm => Abs (fill K t) tm
-  | AppL K tm => App (fill K t) tm
-  | PiR ty K => Pi ty (fill K (ren weaken t))
-  | AbsR ty K => Abs ty (fill K (ren weaken t))
-  | AppR tm K => App tm (fill K t)
+(* Plug a context in place of the hole in a context *)
+Fixpoint fillK {k n m : nat} (K : ctx m n) : ctx n k -> ctx m k :=
+  match K in ctx _ x return ctx x k -> ctx m k with
+  | Hole => fun K' => K'
+  | PiL K fam => fun K' => PiL (fillK K K') fam
+  | AbsL K tm => fun K' => AbsL (fillK K K') tm
+  | AppL K tm => fun K' => AppL (fillK K K') tm
+  | PiR ty K =>
+      fun K' =>
+        match k as k return ctx (S m) k -> ctx m k with
+        | 0 => fun K => match not_ctx_S_0 K with end
+        | S k => fun K => PiR ty K
+        end (fillK K K')
+  | AbsR ty K =>
+      fun K' =>
+        match k as k return ctx (S m) k -> ctx m k with
+        | 0 => fun K => match not_ctx_S_0 K with end
+        | S k => fun K => AbsR ty K
+        end (fillK K K')
+  | AppR tm K => fun K' => AppR tm (fillK K K')
   end.
 
 Lemma ren_ext :
@@ -203,23 +223,11 @@ Proof.
   now rewrite !IH.
 Qed.
 
-Lemma ren_fill :
-  ∀ {k n : nat}
-  (σ : {i | i < k} → {i | i < n})
-  (K : ctx k) (t : term k),
-  ren σ (fill K t) = fill (renK σ K) (ren σ t).
+Lemma fill_fillK {k n m : nat} (K : ctx m n) (K': ctx n k) t :
+  fill (fillK K K') t = fill K (fill K' t).
 Proof.
-  fix IH 4.
-  intros k n σ K t.
-  destruct K; simpl; try congruence.
-  all:
-    f_equal;
-    rewrite IH;
-    f_equal;
-    rewrite !ren_comp;
-    apply ren_ext;
-    intros i;
-    apply lift_weaken.
+  induction K; simpl; try congruence; destruct k; try solve [destruct (not_ctx_S_0 _)]; simpl;
+    f_equal; rewrite IHK; f_equal; symmetry; apply ren_fill.
 Qed.
 
 (* Lifting of variable substitutions *)
@@ -267,18 +275,6 @@ Fixpoint bind {k n : nat} (σ : {i | i < k} → term n) (t : term k) : term n
   | Abs ty tm => Abs (bind σ ty) (bind (lift_bind σ) tm)
   | App tm1 tm2 => App (bind σ tm1) (bind σ tm2)
   | Srt s => Srt s
-  end.
-
-(* Substitution of free variables inside a context *)
-Fixpoint bindK {k n : nat} (σ : {i | i < k} → term n) (K : ctx k) : ctx n :=
-  match K with
-  | Hole => Hole
-  | PiL K fam => PiL (bindK σ K) (bind (lift_bind σ) fam)
-  | AbsL K tm => AbsL (bindK σ K) (bind (lift_bind σ) tm)
-  | AppL K tm2 => AppL (bindK σ K) (bind σ tm2)
-  | PiR ty K => PiR (bind σ ty) (bindK (lift_bind σ) K)
-  | AbsR ty K => AbsR (bind σ ty) (bindK (lift_bind σ) K)
-  | AppR tm1 K => AppR (bind σ tm1) (bindK σ K)
   end.
 
 Lemma bind_ext :
@@ -452,23 +448,6 @@ Proof.
     intros i;
     apply lift_bind_comp.
   now rewrite !IH.
-Qed.
-
-Lemma bind_fill :
-  ∀ {k n : nat}
-  (σ : {i | i < k} → term n)
-  (K : ctx k) (t : term k),
-  bind σ (fill K t) = fill (bindK σ K) (bind σ t).
-Proof.
-  fix IH 4.
-  intros k n σ K t.
-  destruct K; simpl; try congruence.
-  all: rewrite IH;
-    do 2 f_equal;
-    rewrite bind_ren,
-       ren_bind;
-       apply bind_ext;
-       apply lift_bind_weaken.
 Qed.
 
 (* Basic substitution capturing the free variable introduced last *)
