@@ -71,6 +71,8 @@ Inductive Requiv {A} (R: relation A) a : A -> Prop :=
 | Rclot_plus_equiv_r b : Rplus R b a -> Requiv R a b
 | Requiv_refl : Requiv R a a.
 
+Notation "t ≅ u" := (Requiv step t u).
+
 Reserved Notation "t ⪼ u" (at level 70).
 Reserved Notation "t ⪼+ u" (at level 70).
 Reserved Notation "t ⪼* u" (at level 70).
