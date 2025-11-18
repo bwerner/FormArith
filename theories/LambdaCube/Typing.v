@@ -357,3 +357,10 @@ Proof.
       * apply Requiv_clot_r. constructor. assumption.
   - subst. econstructor; try eassumption. apply IHtyping. constructor. assumption.
 Qed.
+
+Lemma subject_reduction (Sc: pi_scheme) {n} Γ (t u : term n) A :
+  Γ ⊢(Sc) t : A -> t ≻* u -> Γ ⊢(Sc) u : A.
+Proof.
+  destruct 2; auto.
+  induction H0; eapply preservation; eauto.
+Qed.
