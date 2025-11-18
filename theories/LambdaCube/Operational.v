@@ -17,7 +17,7 @@ Inductive head_step {n : nat} : term n → term n → Prop :=
 where "t [≻] u" := (head_step t u).
 
 Inductive step {n : nat} : term n → term n → Prop :=
-| ctx_red {k} (K : ctx n k) (t u : term k) :
+| ctx_red {k} (K : ctx k n) (t u : term k) :
   t [≻] u → fill K t ≻ fill K u
 where "t ≻ u" := (step t u).
 
