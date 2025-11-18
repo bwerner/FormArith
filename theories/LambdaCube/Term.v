@@ -294,6 +294,22 @@ Proof.
   all : apply IH, lift_bind_ext, σ_eq.
 Qed.
 
+Lemma bind_id :
+  ∀ {n} (σ : {i | i < n} -> term n) (t: term n), (forall k, σ k = Var k) -> bind σ t = t.
+  induction t; simpl; auto.
+  - intro. f_equal.
+    + apply IHt1. assumption.
+    + apply IHt2. unfold lift_bind. intro. destruct (lt_dec _ _).
+      * rewrite H. simpl. f_equal. apply sig_lt_ext. reflexivity.
+      * f_equal. apply sig_lt_ext. simpl. pose proof (proj2_sig k); simpl in *. lia.
+  - intro. f_equal.
+    + apply IHt1. assumption.
+    + apply IHt2. unfold lift_bind. intro. destruct (lt_dec _ _).
+      * rewrite H. simpl. f_equal. apply sig_lt_ext. reflexivity.
+      * f_equal. apply sig_lt_ext. simpl. pose proof (proj2_sig k); simpl in *. lia.
+  - intro. f_equal; auto.
+Qed.
+
 Lemma lift_bind_lift :
   ∀ {k m n : nat}
     (σ1 : {i | i < k} → {i | i < m})

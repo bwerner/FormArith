@@ -27,7 +27,7 @@ Proof.
 Qed.
 
 Inductive Rplus {A} (R: relation A) a b : Prop :=
-| add_last_R m : Rplus R a m -> R m b -> Rplus R a b
+| add_last m : Rplus R a m -> R m b -> Rplus R a b
 | Rclot_plus : R a b -> Rplus R a b.
 
 Notation "t ≻+ u" := (Rplus step t u).
@@ -67,12 +67,86 @@ Proof.
 Qed.
 
 Inductive Requiv {A} (R: relation A) a : A -> Prop :=
-| Rclot_plus_equiv b : Rplus R a b -> Requiv R a b
-| Rclot_plus_equiv_r b : Rplus R b a -> Requiv R a b
-| Requiv_refl : Requiv R a a.
+| equiv_refl : Requiv R a a
+| equiv_add_last b c : Requiv R a b -> R b c -> Requiv R a c
+| equiv_add_last_r b c : Requiv R a b -> R c b -> Requiv R a c
+.
 
 Notation "t ≅ u" := (Requiv step t u).
 
+Lemma Requiv_clot {A} {R: relation A} {a b} : R a b -> Requiv R a b.
+Proof.
+  intro. econstructor 2; try eassumption. constructor.
+Qed.
+
+Lemma Requiv_clot_r {A} {R: relation A} {a b} : R a b -> Requiv R b a.
+Proof.
+  intro. econstructor 3; try eassumption. constructor.
+Qed.
+
+Lemma Requiv_add_first {A} {R: relation A} {a b c} : R a b -> Requiv R b c -> Requiv R a c.
+Proof.
+  intro. induction 1.
+  - apply Requiv_clot. assumption.
+  - econstructor 2; eassumption.
+  - econstructor 3; eassumption.
+Qed.
+
+Lemma Requiv_add_first_r {A} {R: relation A} {a b c} : R b a -> Requiv R b c -> Requiv R a c.
+Proof.
+  intro. induction 1.
+  - apply Requiv_clot_r. assumption.
+  - econstructor 2; eassumption.
+  - econstructor 3; eassumption.
+Qed.
+
+Lemma Requiv_sym {A} {R: relation A} {x y} : Requiv R x y -> Requiv R y x.
+Proof.
+  induction 1.
+  - constructor.
+  - eapply Requiv_add_first_r; eassumption.
+  - eapply Requiv_add_first; eassumption.
+Qed.
+
+Lemma Requiv_trans {A} {R: relation A} {x y z} : Requiv R x y -> Requiv R y z -> Requiv R x z.
+Proof.
+  induction 2; auto.
+  - econstructor 2; eassumption.
+  - econstructor 3; eassumption.
+Qed.
+
+Lemma Requiv_clot_plus {A} {R: relation A} {a b} : Rplus R a b -> Requiv R a b.
+Proof.
+  induction 1.
+  - econstructor 2; eassumption.
+  - apply Requiv_clot. assumption.
+Qed.
+
+Lemma Requiv_clot_plus_r {A} {R: relation A} {a b} : Rplus R a b -> Requiv R b a.
+Proof.
+  intro. apply Requiv_sym, Requiv_clot_plus. assumption.
+Qed.
+
+Lemma Requiv_clot_star {A} {R: relation A} {a b} : Rstar R a b -> Requiv R a b.
+Proof.
+  destruct 1.
+  - constructor.
+  - apply Requiv_clot_plus. assumption.
+Qed.
+
+Lemma Requiv_clot_star_r {A} {R: relation A} {a b} : Rstar R a b -> Requiv R b a.
+Proof.
+  intro. apply Requiv_sym, Requiv_clot_star. assumption.
+Qed.
+
+Lemma step_equiv_context {n k} (K: ctx n k) t u : t ≅ u -> fill K t ≅ fill K u.
+Proof.
+  induction 1.
+  - constructor.
+  - econstructor; try eassumption. apply step_under_context. assumption.
+  - econstructor 3; try eassumption. apply step_under_context. assumption.
+Qed.
+  
 Reserved Notation "t ⪼ u" (at level 70).
 Reserved Notation "t ⪼+ u" (at level 70).
 Reserved Notation "t ⪼* u" (at level 70).
@@ -246,8 +320,287 @@ Proof.
   - apply par_incl_step_star. assumption.
 Qed.
 
-Lemma confluence_step {n} (t u u': term n) : t ≻* u -> t ≻* u' -> exists v, u ≻* v /\ u' ≻* v.
+Lemma confluence_step {n} {t u u': term n} : t ≻* u -> t ≻* u' -> exists v, u ≻* v /\ u' ≻* v.
 Proof.
   intros tl tr. apply step_star_incl_par_star in tl, tr.
   destruct (confluence_par _ _ _ tl tr) as [v]. exists v. intuition auto using par_star_incl_step_star.
+Qed.
+
+Lemma ren_preserves_redex {k n} (σ: {i | i < k} -> {i | i < n}) (t u: term k) :
+  t [≻] u -> ren σ t [≻] ren σ u.
+  destruct 1. simpl.
+  enough (e : ren σ (bind _ _) = _) by (rewrite e; constructor).
+  rewrite ren_bind. rewrite bind_ren. apply bind_ext.
+  intro. unfold bind_first at 1, lift. destruct (lt_dec _ _).
+  - unfold bind_first. simpl. pose proof (proj2_sig (σ (exist _ (proj1_sig i) l))). simpl in *.
+    destruct (lt_dec _ _); try tauto. f_equal. apply sig_lt_ext. reflexivity.
+  - unfold bind_first. simpl. destruct (lt_dec _ _); auto; lia.
+Qed.
+
+Lemma ren_preserves_step {k n} (σ: {i | i < k} -> {i | i < n}) (t u: term k) :
+  t ≻ u -> ren σ t ≻ ren σ u.
+Proof.
+  destruct 1. induction K in n, σ, t, u, H |- *; simpl.
+  - change (?x ≻ ?y) with (fill Hole x ≻ fill Hole y). constructor. apply ren_preserves_redex.
+    assumption.
+  - change (Pi ?x ?y) with (fill (PiL Hole y) x). apply step_under_context. auto.
+  - change (Abs ?x ?y) with (fill (AbsL Hole y) x). apply step_under_context. auto.
+  - change (App ?x ?y) with (fill (AppL Hole y) x). apply step_under_context. auto.
+  - change (Pi ?x ?y) with (fill (PiR x Hole) y). apply step_under_context. auto.
+  - change (Abs ?x ?y) with (fill (AbsR x Hole) y). apply step_under_context. auto.
+  - change (App ?x ?y) with (fill (AppR x Hole) y). apply step_under_context. auto.
+Qed.
+
+Lemma ren_preserves_step_plus {k n} (σ: {i | i < k} -> {i | i < n}) (t u: term k) :
+  t ≻+ u -> ren σ t ≻+ ren σ u.
+Proof.
+  induction 1.
+  - econstructor; try eassumption. apply ren_preserves_step. assumption.
+  - constructor. apply ren_preserves_step. assumption.
+Qed.
+
+Lemma ren_preserves_step_star {k n} (σ: {i | i < k} -> {i | i < n}) (t u: term k) :
+  t ≻* u -> ren σ t ≻* ren σ u.
+  destruct 1.
+  - constructor.
+  - constructor. apply ren_preserves_step_plus. assumption.
+Qed.
+
+Lemma ren_preserves_step_equiv {k n} (σ: {i | i < k} -> {i | i < n}) (t u: term k) :
+  t ≅ u -> ren σ t ≅ ren σ u.
+  induction 1.
+  - constructor.
+  - econstructor 2; try eassumption. apply ren_preserves_step. assumption.
+  - econstructor 3; try eassumption. apply ren_preserves_step. assumption.
+Qed.
+
+Lemma bind_preserves_redex {k n} (σ: {i | i < k} -> term n) (t u: term k) :
+  t [≻] u -> bind σ t [≻] bind σ u.
+  destruct 1. simpl.
+  enough (e : bind σ (bind _ _) = _) by (rewrite e; constructor).
+  do 2 rewrite bind_comp. apply bind_ext.
+  intro. unfold bind_first at 1, lift_bind. destruct (lt_dec _ _); simpl.
+  - symmetry. rewrite bind_ren. apply bind_id. intro. unfold weaken, bind_first. simpl.
+    pose proof (proj2_sig k0). simpl in *.
+    destruct (lt_dec _ _); try tauto. f_equal. apply sig_lt_ext. reflexivity.
+  - unfold bind_first. simpl. destruct (lt_dec _ _); auto; lia.
+Qed.
+
+Lemma bind_preserves_step {k n} (σ: {i | i < k} -> term n) (t u: term k) :
+  t ≻ u -> bind σ t ≻ bind σ u.
+Proof.
+  destruct 1. induction K in n, σ, t, u, H |- *; simpl.
+  - change (?x ≻ ?y) with (fill Hole x ≻ fill Hole y). constructor. apply bind_preserves_redex.
+    assumption.
+  - change (Pi ?x ?y) with (fill (PiL Hole y) x). apply step_under_context. auto.
+  - change (Abs ?x ?y) with (fill (AbsL Hole y) x). apply step_under_context. auto.
+  - change (App ?x ?y) with (fill (AppL Hole y) x). apply step_under_context. auto.
+  - change (Pi ?x ?y) with (fill (PiR x Hole) y). apply step_under_context. auto.
+  - change (Abs ?x ?y) with (fill (AbsR x Hole) y). apply step_under_context. auto.
+  - change (App ?x ?y) with (fill (AppR x Hole) y). apply step_under_context. auto.
+Qed.
+
+Lemma bind_preserves_step_plus {k n} (σ: {i | i < k} -> term n) (t u: term k) :
+  t ≻+ u -> bind σ t ≻+ bind σ u.
+Proof.
+  induction 1.
+  - econstructor; try eassumption. apply bind_preserves_step. assumption.
+  - constructor. apply bind_preserves_step. assumption.
+Qed.
+
+Lemma bind_preserves_step_star {k n} (σ: {i | i < k} -> term n) (t u: term k) :
+  t ≻* u -> bind σ t ≻* bind σ u.
+  destruct 1.
+  - constructor.
+  - constructor. apply bind_preserves_step_plus. assumption.
+Qed.
+
+Lemma bind_preserves_step_equiv {k n} (σ: {i | i < k} -> term n) (t u: term k) :
+  t ≅ u -> bind σ t ≅ bind σ u.
+  induction 1.
+  - constructor.
+  - econstructor 2; try eassumption. apply bind_preserves_step. assumption.
+  - econstructor 3; try eassumption. apply bind_preserves_step. assumption.
+Qed.
+
+Lemma bind_preserves_step_star_in_subs {k n} (σ1 σ2: {i | i < k} -> term n) (t: term k) :
+  (forall i, σ1 i ≻* σ2 i) -> bind σ1 t ≻* bind σ2 t.
+Proof.
+  intro H. induction t in n, σ1, σ2, H |- *; simpl; auto.
+  - eapply Rstar_trans.
+    + change (Pi ?x ?y) with (fill (PiL Hole y) x). apply step_star_context.
+      eauto.
+    + simpl. change (Pi ?x ?y) with (fill (PiR x Hole) y). apply step_star_context.
+      apply IHt2.
+      unfold lift_bind. intro. destruct (lt_dec _ _).
+      * apply ren_preserves_step_star. apply H.
+      * constructor.
+  - eapply Rstar_trans.
+    + change (Abs ?x ?y) with (fill (AbsL Hole y) x). apply step_star_context.
+      eauto.
+    + simpl. change (Abs ?x ?y) with (fill (AbsR x Hole) y). apply step_star_context.
+      apply IHt2.
+      unfold lift_bind. intro. destruct (lt_dec _ _).
+      * apply ren_preserves_step_star. apply H.
+      * constructor.
+  - eapply Rstar_trans.
+    + change (App ?x ?y) with (fill (AppL Hole y) x). apply step_star_context. auto.
+    + simpl. change (App ?x ?y) with (fill (AppR x Hole) y). apply step_star_context. auto.
+  - constructor.
+Qed.
+
+Lemma bind_preserves_step_equiv_in_subs {k n} (σ1 σ2: {i | i < k} -> term n) (t: term k) :
+  (forall i, σ1 i ≅ σ2 i) -> bind σ1 t ≅ bind σ2 t.
+Proof.
+  intro H. induction t in n, σ1, σ2, H |- *; simpl; auto.
+  - eapply Requiv_trans.
+    + change (Pi ?x ?y) with (fill (PiL Hole y) x). apply step_equiv_context.
+      eauto.
+    + simpl. change (Pi ?x ?y) with (fill (PiR x Hole) y). apply step_equiv_context.
+      apply IHt2.
+      unfold lift_bind. intro. destruct (lt_dec _ _).
+      * apply ren_preserves_step_equiv. apply H.
+      * constructor.
+  - eapply Requiv_trans.
+    + change (Abs ?x ?y) with (fill (AbsL Hole y) x). apply step_equiv_context.
+      eauto.
+    + simpl. change (Abs ?x ?y) with (fill (AbsR x Hole) y). apply step_equiv_context.
+      apply IHt2.
+      unfold lift_bind. intro. destruct (lt_dec _ _).
+      * apply ren_preserves_step_equiv. apply H.
+      * constructor.
+  - eapply Requiv_trans.
+    + change (App ?x ?y) with (fill (AppL Hole y) x). apply step_equiv_context. auto.
+    + simpl. change (App ?x ?y) with (fill (AppR x Hole) y). apply step_equiv_context. auto.
+  - constructor.
+Qed.
+
+Lemma equiv_both_star {n} {t t': term n} : t ≅ t' -> exists v, t ≻* v /\ t' ≻* v.
+Proof.
+  induction 1.
+  - exists t. split; constructor.
+  - destruct IHRequiv as [v [redt redb]].
+    epose proof (Hconfl := confluence_step redb). destruct Hconfl as [v' [redv redc]].
+    + constructor 2. constructor. eassumption.
+    + exists v'. intuition. eapply Rstar_trans; eassumption.
+  - destruct IHRequiv as [v [redt redb]]. exists v. intuition. eapply Rstar_trans; try eassumption.
+    do 2 constructor. assumption.
+Qed.
+
+Lemma no_srt_step {n} {s} {t : term n} : ¬ (Srt s ≻ t).
+Proof.
+  inversion 1; subst; clear H. destruct K; try discriminate. simpl in *. subst. inversion H1.
+Qed.
+
+Lemma srt_star {n} {s} {t: term n} : Srt s ≻* t -> t = Srt s.
+Proof.
+  destruct 1; auto.
+  exfalso. induction H; auto. eapply no_srt_step; eassumption.
+Qed.
+
+Lemma srt_equiv {n} {s} {t: term n} : Srt s ≅ t -> t ≻* Srt s.
+  intro. apply equiv_both_star in H. destruct H as [v [H res]].
+  apply srt_star in H. subst. assumption.
+Qed.
+
+Lemma srt_equiv_srt {n} {s s'} : @Srt n s ≅ Srt s' -> s = s'.
+Proof.
+  intro H. apply srt_equiv in H. apply srt_star in H. congruence.
+Qed.
+
+Lemma no_var_step {n} {i} {t: term n} : ¬ (Var i ≻ t).
+Proof.
+  inversion 1; subst; clear H. destruct K; try discriminate. simpl in *. subst. inversion H1.
+Qed.
+
+Lemma var_star {n} {i} {t: term n} : Var i ≻* t -> t = Var i.
+Proof.
+  destruct 1; auto.
+  exfalso. induction H; auto. eapply no_var_step; eassumption.
+Qed.
+
+Lemma var_equiv {n} {i} {t: term n} : Var i ≅ t -> t ≻* Var i.
+  intro. apply equiv_both_star in H. destruct H as [v [H res]].
+  apply var_star in H. subst. assumption.
+Qed.
+
+Lemma var_equiv_var {n} {i i'} : @Var n i ≅ Var i' -> i = i'.
+Proof.
+  intro. apply var_equiv in H. apply var_star in H. congruence.
+Qed.
+
+Lemma pi_step {n} {A t: term n} {B} :
+  Pi A B ≻ t -> (exists A', A ≻ A' /\ t = Pi A' B) \/ (exists B', B ≻ B' /\ t = Pi A B').
+Proof.
+  inversion 1; subst; clear H. destruct K; try discriminate; simpl in H0; subst.
+  - inversion H1.
+  - inversion H0; subst. left. eexists (fill K _). intuition eauto. constructor. assumption.
+  - inversion H0; subst. right. eexists (fill K _). intuition eauto. constructor. assumption.
+Qed.
+
+Lemma pi_star {n} {A B} {t: term n} : Pi A B ≻* t -> exists A' B', A ≻* A' /\ B ≻* B' /\ t = Pi A' B'.
+Proof.
+  destruct 1; eauto using @Rstar.
+  induction H.
+  - firstorder subst. apply pi_step in H0. firstorder subst.
+    + exists x1, x0. intuition. eapply Rstar_trans; eauto. do 2 constructor. assumption.
+    + exists x, x1. intuition. eapply Rstar_trans; eauto. do 2 constructor. assumption.
+  - apply pi_step in H. firstorder subst.
+    + do 2 eexists; intuition eauto.
+      * do 2 constructor. assumption.
+      * constructor.
+    + do 2 eexists; intuition eauto.
+      * constructor.
+      * do 2 constructor. assumption.
+Qed.
+
+Lemma pi_equiv {n} {A B} {t: term n} : Pi A B ≅ t -> exists A' B', A ≅ A' /\ B ≅ B' /\ t ≻* Pi A' B'.
+  intro. apply equiv_both_star in H. destruct H as [v [H res]].
+  apply pi_star in H. firstorder subst. do 2 eexists; intuition eauto using Requiv_clot_star.
+Qed.
+
+Lemma pi_equiv_pi {n} {A : term n} {A' B B'} : Pi A B ≅ Pi A' B' -> A ≅ A' /\ B ≅ B'.
+Proof.
+  intro H. apply pi_equiv in H as [Av [Bv [Aequiv [Bequiv H]]]].
+  apply pi_star in H. destruct H as [Av' [Bv' [A'star [B'star e]]]].
+  inversion e; subst; clear e.
+  split; eapply Requiv_trans; try eassumption; apply Requiv_clot_star_r; assumption.
+Qed.
+
+Lemma abs_step {n} {A t: term n} {f} :
+  Abs A f ≻ t -> (exists A', A ≻ A' /\ t = Abs A' f) \/ (exists f', f ≻ f' /\ t = Abs A f').
+Proof.
+  inversion 1; subst; clear H. destruct K; try discriminate; simpl in H0; subst.
+  - inversion H1.
+  - inversion H0; subst. left. eexists (fill K _). intuition eauto. constructor. assumption.
+  - inversion H0; subst. right. eexists (fill K _). intuition eauto. constructor. assumption.
+Qed.
+
+Lemma abs_star {n} {A f} {t: term n} : Abs A f ≻* t -> exists A' f', A ≻* A' /\ f ≻* f' /\ t = Abs A' f'.
+Proof.
+  destruct 1; eauto using @Rstar.
+  induction H.
+  - firstorder subst. apply abs_step in H0. firstorder subst.
+    + exists x1, x0. intuition. eapply Rstar_trans; eauto. do 2 constructor. assumption.
+    + exists x, x1. intuition. eapply Rstar_trans; eauto. do 2 constructor. assumption.
+  - apply abs_step in H. firstorder subst.
+    + do 2 eexists; intuition eauto.
+      * do 2 constructor. assumption.
+      * constructor.
+    + do 2 eexists; intuition eauto.
+      * constructor.
+      * do 2 constructor. assumption.
+Qed.
+
+Lemma abs_equiv {n} {A f} {t: term n} : Abs A f ≅ t -> exists A' f', A ≅ A' /\ f ≅ f' /\ t ≻* Abs A' f'.
+  intro. apply equiv_both_star in H. destruct H as [v [H res]].
+  apply abs_star in H. firstorder subst. do 2 eexists; intuition eauto using Requiv_clot_star.
+Qed.
+
+Lemma abs_equiv_abs {n} {A : term n} {A' f f'} : Abs A f ≅ Abs A' f' -> A ≅ A' /\ f ≅ f'.
+Proof.
+  intro H. apply abs_equiv in H as [Av [fv [Aequiv [fequiv H]]]].
+  apply abs_star in H. destruct H as [Av' [fv' [A'star [f'star e]]]].
+  inversion e; subst; clear e.
+  split; eapply Requiv_trans; try eassumption; apply Requiv_clot_star_r; assumption.
 Qed.
