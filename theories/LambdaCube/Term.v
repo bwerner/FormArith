@@ -25,22 +25,22 @@ Arguments App {n}.
 Arguments Srt {n}.
 
 (* Execution contexts of the Lambda Cube with n free variables. *)
-Inductive ctx (n : nat) : nat -> Type :=
-| Hole : ctx n n
-| PiL k : ctx n k → term (S n) → ctx n k
-| AbsL k : ctx n k → term (S n) → ctx n k
-| AppL k : ctx n k → term n → ctx n k
-| PiR k : term n → ctx (S n) (S k) → ctx n (S k)
-| AbsR k : term n → ctx (S n) (S k) → ctx n (S k)
-| AppR k : term n → ctx n k → ctx n k.
+Inductive ctx (k : nat) : nat → Type :=
+| Hole : ctx k k
+| PiL {n} : ctx k n → term (S n) → ctx k n
+| AbsL {n} : ctx k n → term (S n) → ctx k n
+| AppL {n} : ctx k n → term n → ctx k n
+| PiR {n} : term n → ctx k (S n) → ctx k n
+| AbsR {n} : term n → ctx k (S n)→ ctx k n
+| AppR {n} : term n → ctx k n → ctx k n.
 
-Arguments Hole {n}.
-Arguments PiL {n k}.
-Arguments AbsL {n k}.
-Arguments AppL {n k}.
-Arguments PiR {n k}.
-Arguments AbsR {n k}.
-Arguments AppR {n k}.            
+Arguments Hole {k}.
+Arguments PiL {k n}.
+Arguments AbsL {k n}.
+Arguments AppL {k n}.
+Arguments PiR {k n}.
+Arguments AbsR {k n}.
+Arguments AppR {k n}.
 
 Lemma sig_lt_ext {k : nat} (p q : {i | i < k}) :
   proj1_sig p = proj1_sig q → p = q.
@@ -52,12 +52,12 @@ Proof.
   apply le_unique.
 Qed.
 
-Lemma ctx_le n k : ctx n k -> n <= k.
+Lemma ctx_le n k : ctx k n -> n <= k.
 Proof.
   induction 1; lia.
 Qed.
 
-Lemma not_ctx_S_0 {n} : ctx (S n) 0 -> False.
+Lemma not_ctx_S_0 {n} : ctx 0 (S n) -> False.
 Proof.
   intro K. apply ctx_le in K. lia.
 Qed.
@@ -154,37 +154,26 @@ Fixpoint ren {k n : nat} (σ : {i | i < k} → {i | i < n}) (t : term k) : term 
   end.
 
 (* Plug a term in place of the hole in a context *)
-Fixpoint fill {n k : nat} (K : ctx n k) : term k -> term n :=
-  match K in ctx _ k return term k -> term n with
-  | Hole => fun t => t
-  | PiL K fam => fun t => Pi (fill K t) fam
-  | AbsL K tm => fun t => Abs (fill K t) tm
-  | AppL K tm => fun t => App (fill K t) tm
-  | PiR ty K => fun t => Pi ty (fill K t)
-  | AbsR ty K => fun t => Abs ty (fill K t)
-  | AppR tm K => fun t => App tm (fill K t)
+Fixpoint fill {k n : nat} (K : ctx k n) (t : term k) : term n :=
+  match K in ctx _ n with
+  | Hole => t
+  | PiL K fam => Pi (fill K t) fam
+  | AbsL K tm => Abs (fill K t) tm
+  | AppL K tm => App (fill K t) tm
+  | PiR ty K => Pi ty (fill K t)
+  | AbsR ty K => Abs ty (fill K t)
+  | AppR tm K => App tm (fill K t)
   end.
 
-(* Plug a context in place of the hole in a context *)
-Fixpoint fillK {k n m : nat} (K : ctx m n) : ctx n k -> ctx m k :=
-  match K in ctx _ x return ctx x k -> ctx m k with
-  | Hole => fun K' => K'
-  | PiL K fam => fun K' => PiL (fillK K K') fam
-  | AbsL K tm => fun K' => AbsL (fillK K K') tm
-  | AppL K tm => fun K' => AppL (fillK K K') tm
-  | PiR ty K =>
-      fun K' =>
-        match k as k return ctx (S m) k -> ctx m k with
-        | 0 => fun K => match not_ctx_S_0 K with end
-        | S k => fun K => PiR ty K
-        end (fillK K K')
-  | AbsR ty K =>
-      fun K' =>
-        match k as k return ctx (S m) k -> ctx m k with
-        | 0 => fun K => match not_ctx_S_0 K with end
-        | S k => fun K => AbsR ty K
-        end (fillK K K')
-  | AppR tm K => fun K' => AppR tm (fillK K K')
+Fixpoint fillK {k n m : nat} (K : ctx n m) (C : ctx k n) : ctx k m :=
+  match K in ctx _ m0 return ctx k m0 with
+  | Hole => C
+  | PiL K fam => PiL (fillK K C) fam
+  | AbsL K tm => AbsL (fillK K C) tm
+  | AppL K tm => AppL (fillK K C) tm
+  | PiR ty K => PiR ty (fillK K C)
+  | AbsR ty K => AbsR ty (fillK K C)
+  | AppR tm K => AppR tm (fillK K C)
   end.
 
 Lemma ren_ext :
@@ -223,7 +212,7 @@ Proof.
   now rewrite !IH.
 Qed.
 
-Lemma fill_fillK {k n m : nat} (K : ctx m n) (K': ctx n k) t :
+Lemma fill_fillK {k n m : nat} (K : ctx n m) (K': ctx k n) t :
   fill (fillK K K') t = fill K (fill K' t).
 Proof.
   induction K; simpl; try congruence; destruct k; try solve [destruct (not_ctx_S_0 _)]; simpl;
