@@ -292,10 +292,10 @@ Proof.
       intro. destruct i; simpl. unfold bind_first at 1. simpl. destruct (lt_dec _ _).
       - rewrite bind_ren. rewrite bind_id.
         + constructor. eapply typing_imp_ctx_wf; eassumption.
-        + unfold bind_first, weaken. simpl. intro. pose proof (proj2_sig k). simpl in *.
+        + unfold bind_first, weaken. simpl. intro i. pose proof (proj2_sig i). simpl in *.
           destruct (lt_dec _ _); try tauto. f_equal. apply sig_lt_ext. reflexivity.
       - rewrite bind_ren. rewrite bind_id; try assumption.
-        unfold bind_first, weaken. simpl. intro. pose proof (proj2_sig k). simpl in *.
+        unfold bind_first, weaken. simpl. intro i. pose proof (proj2_sig i). simpl in *.
         destruct (lt_dec _ _); try tauto. f_equal. apply sig_lt_ext. reflexivity.
     }
     clear. intros ? ? ? ? ? ? ? H tyx Γwf. induction tyx in n, σ, Γ, H, Γwf |- *; simpl in *; auto.
