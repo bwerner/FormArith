@@ -508,6 +508,105 @@ Proof.
   intro H. apply srt_equiv in H. apply srt_star in H. congruence.
 Qed.
 
+Lemma no_spontaneous_srt_ren  {k n m s} {σ: {i | i < k} -> {i | i < n}} {t : term k} {K: ctx m n} :
+  ren σ t = fill K (Srt s) -> exists k0 (K' : ctx k0 k), t = fill K' (Srt s).
+  induction t in n, m, σ, K |- *; simpl; destruct K; intro e; inversion e; clear e; subst.
+  - apply IHt1 in H0 as [k [K' e]]. subst. exists _, (PiL K' t2). reflexivity.
+  - apply IHt2 in H1 as [k [K' e]]. subst. exists _, (PiR t1 K'). reflexivity.
+  - apply IHt1 in H0 as [k [K' e]]. subst. exists _, (AbsL K' t2). reflexivity.
+  - apply IHt2 in H1 as [k [K' e]]. subst. exists _, (AbsR t1 K'). reflexivity.
+  - apply IHt1 in H0 as [k [K' e]]. subst. exists _, (AppL K' t2). reflexivity.
+  - apply IHt2 in H1 as [k [K' e]]. subst. exists _, (AppR t1 K'). reflexivity.
+  - exists _, Hole. reflexivity.
+Qed.
+
+Lemma no_spontaneous_srt_bind {k n m s} {σ: {i | i < k} -> term n} {t : term k} {K: ctx m n} :
+  bind σ t = fill K (Srt s) ->
+  (exists k0 (K': ctx k0 k), t = fill K' (Srt s)) \/ (exists i k0 (K': ctx k0 n), σ i = fill K' (Srt s)).
+  induction t in n, m, σ, K |- *; simpl.
+  - right. repeat eexists; eassumption.
+  - destruct K; simpl; intro H; inversion H; subst; clear H.
+    + apply IHt1 in H1. destruct H1 as [[k [K' e]]| [i [k [K' e]]]].
+      * subst. left. eexists. exists (PiL K' t2). reflexivity.
+      * right. repeat eexists; eassumption.
+    + apply IHt2 in H2. destruct H2 as [[k [K' e]]| [i [k [K' e]]]].
+      * subst. left. eexists. exists (PiR t1 K'). reflexivity.
+      * right. unfold lift_bind in *. destruct (lt_dec _ _); swap 1 2.
+        { exfalso. revert e. clear. remember (exist _ _ _) eqn: e. clear e.
+          destruct K'; discriminate. }
+        apply no_spontaneous_srt_ren in e as [k0 [K0 e]]. repeat eexists; eassumption.
+  - destruct K; simpl; intro H; inversion H; subst; clear H.
+    + apply IHt1 in H1. destruct H1 as [[k [K' e]]| [i [k [K' e]]]].
+      * subst. left. eexists. exists (AbsL K' t2). reflexivity.
+      * right. repeat eexists; eassumption.
+    + apply IHt2 in H2. destruct H2 as [[k [K' e]]| [i [k [K' e]]]].
+      * subst. left. eexists. exists (AbsR t1 K'). reflexivity.
+      * right. unfold lift_bind in *. destruct (lt_dec _ _); swap 1 2.
+        { exfalso. revert e. clear. remember (exist _ _ _) eqn: e. clear e.
+          destruct K'; discriminate. }
+        apply no_spontaneous_srt_ren in e as [k0 [K0 e]]. repeat eexists; eassumption.
+  - destruct K; simpl; intro H; inversion H; subst; clear H.
+    + apply IHt1 in H1. destruct H1 as [[k [K' e]]| [i [k [K' e]]]].
+      * subst. left. eexists. exists (AppL K' t2). reflexivity.
+      * right. repeat eexists; eassumption.
+    + apply IHt2 in H2. destruct H2 as [[k [K' e]]| [i [k [K' e]]]].
+      * subst. left. eexists. exists (AppR t1 K'). reflexivity.
+      * right. repeat eexists; eassumption.
+  - destruct K; simpl; intro e; inversion e; subst; clear e. left. exists _, Hole. reflexivity.
+Qed.
+
+Lemma no_spontaneous_srt_redex {k n} {s t} {K: ctx k n} :
+  t [≻] fill K (Srt s) -> exists k0 (K': ctx k0 n), t = fill K' (Srt s).
+Proof.
+  inversion 1; subst; clear H.
+  apply no_spontaneous_srt_bind in H2 as [[m [K' e]] | [i [m [K' e]]]].
+  - subst. eexists. exists (AppL (AbsR ty K') arg). reflexivity.
+  - unfold bind_first in *. destruct (lt_dec _ _). { destruct K'; try discriminate. } subst.
+    eexists _, (AppR _ K'). simpl. reflexivity.
+Qed.
+
+Lemma no_spontaneous_srt_step {k n} {s t} {K: ctx k n} :
+  t ≻ fill K (Srt s) -> exists k0 (K': ctx k0 n), t = fill K' (Srt s).
+Proof.
+  intro r. inversion r; subst; clear r. induction K0; simpl in *.
+  - subst. eapply no_spontaneous_srt_redex. eassumption.
+  - destruct K; simpl in *; inversion H; subst; clear H.
+    + apply IHK0 in H2 as [m [K' e]]. rewrite e. exists _, (PiL K' t1). reflexivity.
+    + eexists _, (PiR _ K). reflexivity.
+  - destruct K; simpl in *; inversion H; subst; clear H.
+    + apply IHK0 in H2 as [m [K' e]]. rewrite e. exists _, (AbsL K' t1). reflexivity.
+    + eexists _, (AbsR _ K). reflexivity.
+  - destruct K; simpl in *; inversion H; subst; clear H.
+    + apply IHK0 in H2 as [m [K' e]]. rewrite e. exists _, (AppL K' t1). reflexivity.
+    + eexists _, (AppR _ K). reflexivity.
+  -  destruct K; simpl in *; inversion H; subst; clear H.
+    + eexists _, (PiL K _). reflexivity.
+    + apply IHK0 in H3 as [m [K' e]]. rewrite e. exists _, (PiR t1 K'). reflexivity.
+  - destruct K; simpl in *; inversion H; subst; clear H.
+    + eexists _, (AbsL K _). reflexivity.
+    + apply IHK0 in H3 as [m [K' e]]. rewrite e. exists _, (AbsR t1 K'). reflexivity.
+  - destruct K; simpl in *; inversion H; subst; clear H.
+    + eexists _, (AppL K _). reflexivity.
+    + apply IHK0 in H3 as [m [K' e]]. rewrite e. exists _, (AppR t1 K'). reflexivity.
+Qed.
+
+Lemma no_spontaneous_srt_step_plus {k n} {s t} {K: ctx k n} :
+  t ≻+ fill K (Srt s) -> exists k0 (K': ctx k0 n), t = fill K' (Srt s).
+Proof.
+  remember (fill K (Srt s)).
+  induction 1 in k, K, s, Heqt0 |- *; subst.
+  - apply no_spontaneous_srt_step in H0 as [k' [K' e]]. apply IHRplus in e. firstorder.
+  - apply no_spontaneous_srt_step in H as [k' [K' e]]. firstorder.
+Qed.
+
+Lemma no_spontaneous_srt_step_star {k n} {s t} {K: ctx k n} :
+  t ≻* fill K (Srt s) -> exists k0 (K': ctx k0 n), t = fill K' (Srt s).
+Proof.
+  remember (fill _ _). destruct 1.
+  - subst. repeat eexists.
+  - subst. eapply no_spontaneous_srt_step_plus. eassumption.
+Qed.
+
 Lemma no_var_step {n} {i} {t: term n} : ¬ (Var i ≻ t).
 Proof.
   inversion 1; subst; clear H. destruct K; try discriminate. simpl in *. subst. inversion H1.
