@@ -8,9 +8,7 @@ Inductive typing_ctx : nat -> Type :=
 | cons {n} : typing_ctx n -> term n -> typing_ctx (S n).
 
 Notation "\" := empty.
-Notation "A , t" := (cons A t) (at level 61, left associativity, t at next level).
-
-Search (_ < S _ -> {_} + {_}).
+Notation "A ; t" := (cons A t) (at level 61, left associativity, t at next level).
 
 Fixpoint kth_index_ctx {n} (Γ: typing_ctx n) k {struct Γ} : k < n -> term n :=
   match Γ in typing_ctx n return k < n -> term n with
@@ -37,12 +35,12 @@ Inductive typing (P: pi_scheme) : forall {n}, typing_ctx n -> term n -> term n -
 | typ_var {n} {Γ: typing_ctx n} {i} :
   Γ ⊢(P) -> Γ ⊢(P) Var i : kth_index_ctx Γ (proj1_sig i) (proj2_sig i)
 | typ_pi {n} {Γ: typing_ctx n} {A B s s'} :
-  pi_scheme_check P s s' -> Γ ⊢(P) A : Srt s -> Γ, A ⊢(P) B : Srt s' -> Γ ⊢(P) Pi A B : Srt s'
+  pi_scheme_check P s s' -> Γ ⊢(P) A : Srt s -> Γ; A ⊢(P) B : Srt s' -> Γ ⊢(P) Pi A B : Srt s'
 | typ_abs {n} {Γ: typing_ctx n} {A B s s' t} :
   pi_scheme_check P s s' ->
   Γ ⊢(P) A : Srt s ->
-  Γ, A ⊢(P) B : Srt s' ->
-  Γ, A ⊢(P) t : B ->
+  Γ; A ⊢(P) B : Srt s' ->
+  Γ; A ⊢(P) t : B ->
   Γ ⊢(P) Abs A t : Pi A B
 | typ_app {n} {Γ: typing_ctx n} {A B t u} :
   Γ ⊢(P) t : Pi A B -> Γ ⊢(P) u : A -> Γ ⊢(P) App t u : bind (bind_first u) B
@@ -51,7 +49,7 @@ Inductive typing (P: pi_scheme) : forall {n}, typing_ctx n -> term n -> term n -
 with ctx_wf (P: pi_scheme) : forall {n}, typing_ctx n -> Prop :=
 | empty_wf : \ ⊢(P)
 | cons_wf {n} {A: typing_ctx n} {t: term n} {s} :
-  A ⊢(P) -> A ⊢(P) t : Srt s -> A, t ⊢(P)
+  A ⊢(P) -> A ⊢(P) t : Srt s -> A; t ⊢(P)
 where "A ⊢( P ) t ':' s" := (typing P A t s)
 and "A ⊢( P )" := (ctx_wf P A)
 .
@@ -117,7 +115,7 @@ Qed.
 
 Lemma typ_pi_inv Sc {n} (Γ : typing_ctx n) A B T :
   Γ ⊢(Sc) Pi A B : T -> exists s s',
-        T ≅ Srt s' /\ Γ ⊢(Sc) A : Srt s /\ Γ, A ⊢(Sc) B : Srt s' /\ pi_scheme_check Sc s s'.
+        T ≅ Srt s' /\ Γ ⊢(Sc) A : Srt s /\ Γ; A ⊢(Sc) B : Srt s' /\ pi_scheme_check Sc s s'.
 Proof.
   remember (Pi A B). induction 1 in A, B, Heqt |- *; try discriminate.
   - exists s. exists s'. inversion Heqt; subst; clear Heqt. intuition constructor.
@@ -128,7 +126,7 @@ Qed.
 Lemma typ_abs_inv Sc {n} (Γ: typing_ctx n) A t T :
   Γ ⊢(Sc) Abs A t : T ->
   exists s s' B X,
-    T ≅ Pi A B /\ Γ ⊢(Sc) A : Srt s /\ Γ, A ⊢(Sc) B : Srt s' /\ Γ, A ⊢(Sc) t : B /\
+    T ≅ Pi A B /\ Γ ⊢(Sc) A : Srt s /\ Γ; A ⊢(Sc) B : Srt s' /\ Γ; A ⊢(Sc) t : B /\
       Γ ⊢(Sc) T : X /\ pi_scheme_check Sc s s'.
 Proof.
   remember (Abs A t).
@@ -216,7 +214,7 @@ Lemma gen_weakening {Sc n k} {σ: {i | i < n} -> {i | i < k}} {Γ Γ' x T}  :
 Qed.
 
 Lemma weakening {Sc n} {Γ: typing_ctx n} {A x T s}:
-  Γ ⊢(Sc) x : T -> Γ ⊢(Sc) A : Srt s -> Γ, A ⊢(Sc) ren weaken x : ren weaken T.
+  Γ ⊢(Sc) x : T -> Γ ⊢(Sc) A : Srt s -> Γ; A ⊢(Sc) ren weaken x : ren weaken T.
 Proof.
   intros. eapply gen_weakening; eauto.
   - destruct i; simpl. destruct (lt_dec _ _); try tauto. f_equal. f_equal. apply le_unique.
@@ -289,7 +287,7 @@ Lemma bind_typ Sc n k (σ : {i | i < k} -> term n) Γ Γ' x T :
       * rewrite bind_weaken. eapply weakening; eauto.
       * rewrite bind_weaken.
         replace (ren weaken (bind σ A)) with
-          (kth_index_ctx (Γ, bind σ A) n (Nat.lt_succ_diag_r n)).
+          (kth_index_ctx (Γ; bind σ A) n (Nat.lt_succ_diag_r n)).
         -- constructor. econstructor; eauto.
         -- simpl. destruct (lt_dec n n); try lia. reflexivity.
     + econstructor; eauto.
@@ -299,7 +297,7 @@ Lemma bind_typ Sc n k (σ : {i | i < k} -> term n) Γ Γ' x T :
         destruct (lt_dec _ _).
         -- eapply weakening; eauto.
         -- replace (ren weaken (bind σ A)) with
-             (kth_index_ctx (Γ, bind σ A) n (Nat.lt_succ_diag_r n)).
+             (kth_index_ctx (Γ; bind σ A) n (Nat.lt_succ_diag_r n)).
            ++ do 2 econstructor; eauto.
            ++ simpl. destruct (lt_dec _ _); try lia. reflexivity.
       * econstructor; eauto.
@@ -307,7 +305,7 @@ Lemma bind_typ Sc n k (σ : {i | i < k} -> term n) Γ Γ' x T :
       * intro. rewrite bind_weaken. unfold lift_bind at 1. destruct (lt_dec _ _).
         -- eapply weakening; eauto.
         -- replace (ren weaken (bind σ A)) with
-             (kth_index_ctx (Γ, bind σ A) n (Nat.lt_succ_diag_r n)).
+             (kth_index_ctx (Γ; bind σ A) n (Nat.lt_succ_diag_r n)).
            ++ do 2 econstructor; eauto.
            ++ simpl. destruct (lt_dec _ _); try lia. reflexivity.
       * econstructor; eauto.
@@ -321,6 +319,21 @@ Lemma bind_typ Sc n k (σ : {i | i < k} -> term n) Γ Γ' x T :
         f_equal. apply sig_lt_ext. reflexivity.
       * unfold bind_first. simpl. destruct (lt_dec _ _); try lia. reflexivity.
   - econstructor; eauto. apply bind_preserves_step_equiv. assumption.
+Qed.
+
+Lemma bind_first_typ {Sc n Γ} {u: term n} {t U T} :
+  Γ ⊢(Sc) u : U -> Γ; U ⊢(Sc) t : T -> Γ ⊢(Sc) bind (bind_first u) t : bind (bind_first u) T.
+Proof.
+  intros. assert (Γ ⊢(Sc)) by (eapply typing_imp_ctx_wf; eassumption).
+  eapply bind_typ; try eassumption.
+  intro. simpl. unfold bind_first at 1. destruct (lt_dec _ _).
+  - rewrite bind_ren. rewrite bind_id.
+    + constructor. assumption.
+    + intro. unfold weaken, bind_first. simpl. pose proof (proj2_sig k). simpl in *.
+      destruct (lt_dec _ _); try tauto. f_equal. apply sig_lt_ext. reflexivity.
+  - rewrite bind_ren. rewrite bind_id; try assumption.
+    intro. unfold weaken, bind_first. simpl. pose proof (proj2_sig k). simpl in *.
+    destruct (lt_dec _ _); try tauto. f_equal. apply sig_lt_ext. reflexivity.
 Qed.
 
 Lemma typed_imp_subterm_typed {Sc} {n k} {Γ u T} {K: ctx k n} :
@@ -382,12 +395,7 @@ Proof.
     apply typ_pi_inv in IHtyping1 as [s' [s'' [equiv_srts [typA [typB Sc_check]]]]].
     apply srt_equiv_srt in equiv_srts. subst. rename s' into s, s'' into s'.
     change (Srt s') with (bind (bind_first u) (Srt s')).
-    eapply bind_typ; try eassumption.
-    * intro. unfold bind_first at 1. simpl. rewrite bind_ren. rewrite bind_id.
-      { destruct (lt_dec _ _); try assumption. constructor. eauto using typing_imp_ctx_wf. }
-      clear. destruct k. unfold bind_first. simpl. destruct (lt_dec x n); try tauto.
-      f_equal. apply sig_lt_ext. reflexivity.
-    * eauto using typing_imp_ctx_wf.
+    eapply bind_first_typ; try eassumption.
   - destruct IHtyping1.
     + subst. apply srt_equiv in H0. left. clear IHtyping2. clear dependent t.
       apply @no_spontaneous_srt_step_star with (K := Hole) in H0 as [k [K e]]. subst.
@@ -463,7 +471,7 @@ Proof.
     destruct H as [Hequiv [type_ty [type_B0 [type_body [typ_piAB pi_check]]]]].
     apply pi_equiv_pi in Hequiv as [Aequiv Bequiv].
     apply typ_pi_inv in typ_piAB as [s0 [s0' [Xequiv [typA [typB pi_check2]]]]].
-    assert (true_type_body : Γ, ty ⊢(Sc) body : B).
+   assert (true_type_body : Γ; ty ⊢(Sc) body : B).
     { econstructor; eauto using Requiv_sym. eapply equiv_context; try eassumption.
       - simpl. intros. apply ren_preserves_step_equiv.
         destruct (lt_dec _ _); auto using Requiv_sym. constructor.
@@ -479,15 +487,7 @@ Proof.
     assert (true_type_u : Γ ⊢(Sc) u : ty).
     { econstructor; eauto. }
     revert true_type_body true_type_u. clear. intros tybody tyu.
-    eapply bind_typ; eauto using typing_imp_ctx_wf.
-    intro. destruct i; simpl. unfold bind_first at 1. simpl. destruct (lt_dec _ _).
-    + rewrite bind_ren. rewrite bind_id.
-      * constructor. eapply typing_imp_ctx_wf; eassumption.
-      * unfold bind_first, weaken. simpl. intro i. pose proof (proj2_sig i). simpl in *.
-        destruct (lt_dec _ _); try tauto. f_equal. apply sig_lt_ext. reflexivity.
-    + rewrite bind_ren. rewrite bind_id; try assumption.
-      unfold bind_first, weaken. simpl. intro i. pose proof (proj2_sig i). simpl in *.
-      destruct (lt_dec _ _); try tauto. f_equal. apply sig_lt_ext. reflexivity.
+    eapply bind_first_typ; eassumption.
   - inversion H1; subst; clear H1. econstructor; try eassumption.
     apply IHtyping1. constructor. assumption.
   - inversion H1; subst; clear H1. apply srt_typing in H as typPi.
@@ -501,12 +501,7 @@ Proof.
       * constructor.
       * apply Requiv_clot_r. constructor. assumption.
     + change (Srt ?x) with (bind (bind_first (fill K t0)) (Srt x)).
-      eapply bind_typ; eauto using typing_imp_ctx_wf. simpl. intro. rewrite bind_ren.
-      rewrite bind_id.
-      * unfold bind_first. destruct (lt_dec _ _); try eassumption.
-        constructor. eapply typing_imp_ctx_wf. eassumption.
-      * intro. unfold bind_first, weaken. simpl. pose proof (proj2_sig k0). simpl in *.
-        destruct (lt_dec _ _); try tauto. f_equal. apply sig_lt_ext. reflexivity.
+      eapply bind_first_typ; eassumption.
   - subst. econstructor; try eassumption. apply IHtyping1. constructor. assumption.
 Qed.
 

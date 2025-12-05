@@ -330,6 +330,18 @@ Proof.
   - eapply neutral_app_step; try eassumption.
 Qed.
 
+Lemma whnf_is_sort_type_or_never_will_be {n} {t: term n} :
+  whnf t ->
+  match t with Srt _ => True | _ => forall s, ¬ (t ≅ Srt s) end.
+Proof.
+  destruct t; auto; intros H ? e; apply Requiv_sym, srt_equiv in e.
+  - apply var_star in e. discriminate.
+  - apply pi_star in e. firstorder discriminate.
+  - apply abs_star in e. firstorder discriminate.
+  - inversion_clear H. inversion_clear H0. apply neutral_app_step_star in e; auto.
+    firstorder discriminate.
+Qed.
+
 Lemma whnf_is_pi_type_or_never_will_be {n} {t: term n} :
   whnf t ->
   match t with Pi _ _ => True | _ => forall A B, ¬ (t ≅ Pi A B) end.
