@@ -1,7 +1,7 @@
 From Coq Require Import Utf8.
 From Coq Require Import Arith Lia.
 From FormArith Require Import Base.
-From FormArith.LambdaCube Require Import Term Operational Typing SN whnf.
+From FormArith.LambdaCube Require Import Term Operational Typing SN WHNF.
 
 Fixpoint next_step {n} (t: term n) : option (term n) :=
   match t with

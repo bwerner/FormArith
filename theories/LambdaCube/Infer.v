@@ -1,7 +1,7 @@
 From Coq Require Import Utf8.
 From Coq Require Import Arith Lia.
 From FormArith Require Import Base.
-From FormArith.LambdaCube Require Import Term Operational Typing SN whnf normalize.
+From FormArith.LambdaCube Require Import Term Operational Typing SN WHNF Normalize.
 
 Inductive strong_ctx_wf (Sc: pi_scheme) : forall {n}, typing_ctx n -> Type :=
 | strong_empty_wf : strong_ctx_wf Sc \
